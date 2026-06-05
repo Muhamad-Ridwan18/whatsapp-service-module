@@ -26,6 +26,8 @@ interface SessionInstance {
   socket: WASocket | null;
   status: SessionStatus;
   qrBase64: string | null;
+  /** Raw QR string terakhir — hindari re-encode & emit duplikat. */
+  lastQrRaw: string | null;
   reconnectAttempts: number;
   isConnecting: boolean;
 }
@@ -207,6 +209,7 @@ class SessionManager {
       socket: null,
       status: 'initializing' as SessionStatus,
       qrBase64: null,
+      lastQrRaw: null,
       reconnectAttempts: 0,
       isConnecting: false,
     };
@@ -226,6 +229,7 @@ class SessionManager {
         socket: null,
         status: 'initializing',
         qrBase64: null,
+        lastQrRaw: null,
         reconnectAttempts: 0,
         isConnecting: false,
       };
@@ -241,9 +245,14 @@ class SessionManager {
       inst.socket = null;
     }
 
+    const inQrWait = inst.status === 'qr_ready' && !!inst.qrBase64;
     inst.isConnecting = true;
-    inst.qrBase64 = null;
-    this.setStatus(sessionId, 'initializing');
+
+    if (!inQrWait) {
+      inst.qrBase64 = null;
+      inst.lastQrRaw = null;
+      this.setStatus(sessionId, 'initializing');
+    }
 
     try {
       const { version } = await fetchLatestBaileysVersion();
@@ -273,7 +282,10 @@ class SessionManager {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
+          if (qr === inst!.lastQrRaw) return;
+
           inst!.reconnectAttempts = 0;
+          inst!.lastQrRaw = qr;
           const qrBase64 = await QRCode.toDataURL(qr, { width: 256, margin: 1 });
           inst!.qrBase64 = qrBase64.replace(/^data:image\/png;base64,/, '');
           this.setStatus(sessionId, 'qr_ready');
@@ -320,14 +332,28 @@ class SessionManager {
             inst!.status === 'qr_ready' ||
             inst!.status === 'reconnecting';
 
-          if (restartRequired || (inQrPhase && inst!.reconnectAttempts < 30)) {
+          if (inQrPhase && !restartRequired) {
+            inst!.isConnecting = false;
+            if (inst!.qrBase64) {
+              this.setStatus(sessionId, 'qr_ready');
+            }
+            waLogger.info(
+              { sessionId, statusCode },
+              'QR phase disconnect — tunggu scan, tidak reconnect agresif',
+            );
+            return;
+          }
+
+          if (restartRequired || (inQrPhase && inst!.reconnectAttempts < 3)) {
             if (!restartRequired) inst!.reconnectAttempts++;
             this.setStatus(sessionId, inQrPhase ? 'qr_ready' : 'reconnecting');
             waLogger.warn(
               { sessionId, statusCode, attempt: inst!.reconnectAttempts, restartRequired },
               'Reconnecting session',
             );
-            const delay = restartRequired ? 0 : config.whatsapp.reconnectIntervalMs;
+            const delay = restartRequired
+              ? 2000
+              : Math.max(config.whatsapp.reconnectIntervalMs, 15000);
             setTimeout(() => {
               void this.connect(sessionId);
             }, delay);

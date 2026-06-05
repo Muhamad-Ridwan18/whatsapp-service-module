@@ -186,7 +186,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
     const unsubStatus = waEventBus.onStatus((sid) => {
       if (sid === sessionId) {
-        sendSnapshot(true);
+        sendSnapshot(false);
       }
     });
 

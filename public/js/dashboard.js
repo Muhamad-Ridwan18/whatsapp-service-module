@@ -166,10 +166,13 @@
   function loadQr(sessionId) {
     if (!sessionId) return;
 
+    var keepQr = sessionId === activeSessionId && lastQrData;
+    var keepStatus = sessionId === activeSessionId ? lastStatus : null;
+
     stopQrWatch();
     activeSessionId = sessionId;
-    lastQrData = null;
-    lastStatus = null;
+    lastQrData = keepQr ? lastQrData : null;
+    lastStatus = keepStatus;
 
     switchTab('whatsapp');
 
@@ -177,9 +180,11 @@
     if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     var box = document.getElementById('qrBox');
-    if (box) {
+    if (box && !lastQrData) {
       box.className = 'qr-frame';
       box.innerHTML = '<p class="text-sm text-txt-muted animate-pulse-soft">Memuat...</p>';
+    } else if (box && lastQrData) {
+      applyQrImage(box, lastQrData);
     }
 
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -194,7 +199,9 @@
     };
 
     wsQr.onclose = function () {
-      if (activeSessionId === sessionId && lastStatus !== 'connected' && lastStatus !== 'failed') {
+      if (activeSessionId !== sessionId) return;
+      if (lastStatus === 'connected' || lastStatus === 'failed') return;
+      if (!lastQrData) {
         fetchQrFallback(sessionId);
       }
     };
@@ -206,7 +213,7 @@
       }
     }, 4000);
 
-    // Polling cadangan 30 detik (bukan 3–5 detik) agar tidak flicker
+    // Polling cadangan 60 detik — QR WhatsApp sendiri refresh ~60 detik
     pollTimer = setInterval(function () {
       if (activeSessionId !== sessionId) return;
       if (lastStatus === 'connected' || lastStatus === 'failed') {
@@ -214,7 +221,7 @@
         return;
       }
       fetchQrFallback(sessionId);
-    }, 30000);
+    }, 60000);
   }
 
   document.querySelectorAll('.btn-show-qr').forEach(function (btn) {
