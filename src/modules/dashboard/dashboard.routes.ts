@@ -310,7 +310,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    await sessionManager.ensureConnection(sessionId);
 
     return sendSuccess(reply, {
       qr: sessionManager.getQr(sessionId),

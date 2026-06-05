@@ -1,5 +1,9 @@
 (function () {
   var wsQr = null;
+  var pollTimer = null;
+  var lastQrData = null;
+  var lastStatus = null;
+  var activeSessionId = null;
   var scanSession = document.body.dataset.scanSession || null;
   var initialTab = document.body.dataset.activeTab || 'whatsapp';
 
@@ -27,10 +31,37 @@
 
   switchTab(initialTab);
 
+  function stopQrWatch() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (wsQr) {
+      wsQr.onclose = null;
+      wsQr.close();
+      wsQr = null;
+    }
+    activeSessionId = null;
+  }
+
+  function applyQrImage(box, qr) {
+    var src = 'data:image/png;base64,' + qr;
+    var img = box.querySelector('img');
+    if (img && img.src === src) return;
+    box.className = 'qr-frame has-qr';
+    if (img) {
+      img.src = src;
+    } else {
+      box.innerHTML =
+        '<img src="' + src +
+        '" class="max-w-[min(200px,80vw)] rounded-xl" alt="QR Code">';
+    }
+  }
+
   function renderQr(data) {
     var box = document.getElementById('qrBox');
-    var status = document.getElementById('qrStatus');
-    if (!box || !status) return;
+    var statusEl = document.getElementById('qrStatus');
+    if (!box || !statusEl) return;
 
     var labels = {
       connected: 'Terhubung',
@@ -40,38 +71,89 @@
       disconnected: 'Terputus',
       failed: 'Gagal',
     };
-    var s = data.status || '';
-    status.textContent = labels[s] || s;
+
+    var s = data.status || lastStatus || '';
+    if (data.status) lastStatus = data.status;
 
     if (data.qr) {
-      box.className = 'qr-frame has-qr';
-      box.innerHTML =
-        '<img src="data:image/png;base64,' + data.qr +
-        '" class="max-w-[min(200px,80vw)] rounded-xl" alt="QR Code">';
-    } else if (s === 'connected') {
+      lastQrData = data.qr;
+      applyQrImage(box, data.qr);
+    }
+
+    statusEl.textContent = labels[s] || s;
+
+    if (s === 'connected') {
+      lastQrData = null;
       box.className = 'qr-frame has-qr';
       box.innerHTML =
         '<div class="text-center"><p class="text-3xl text-brand mb-2">✓</p>' +
         '<p class="text-brand font-semibold">Terhubung</p>' +
         '<p class="hint mt-1">Siap kirim pesan</p></div>';
-    } else if (s === 'initializing' || s === 'reconnecting' || s === 'qr_ready') {
+      stopQrWatch();
+      return;
+    }
+
+    if (s === 'failed') {
+      lastQrData = null;
       box.className = 'qr-frame';
-      box.innerHTML = '<p class="text-sm text-txt-muted animate-pulse-soft">Menunggu QR...</p>';
-    } else if (s === 'failed') {
-      box.className = 'qr-frame';
-      box.innerHTML = '<p class="text-sm text-red-400">Gagal. Klik "Sambung ulang" di daftar session.</p>';
+      box.innerHTML =
+        '<p class="text-sm text-red-400">Gagal. Klik "Sambung ulang" di daftar session.</p>';
+      stopQrWatch();
+      return;
+    }
+
+    // Status update tanpa QR baru — jangan hapus QR yang sudah tampil
+    if (!data.qr && lastQrData) {
+      applyQrImage(box, lastQrData);
+      return;
+    }
+
+    if (!data.qr && (s === 'initializing' || s === 'reconnecting')) {
+      if (!lastQrData) {
+        box.className = 'qr-frame';
+        box.innerHTML =
+          '<p class="text-sm text-txt-muted animate-pulse-soft">Menunggu QR...</p>';
+      }
     }
   }
 
+  function handleWsMessage(raw) {
+    var data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      return;
+    }
+
+    if (data.type === 'status') {
+      renderQr({ status: data.status, qr: data.qr || null });
+      return;
+    }
+
+    renderQr({
+      status: data.status,
+      qr: data.qr || null,
+    });
+  }
+
   function fetchQrFallback(id) {
+    if (activeSessionId !== id) return;
     fetch('/dashboard/session/' + id + '/qr')
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j.data) renderQr(j.data); })
+      .then(function (j) {
+        if (activeSessionId !== id || !j.data) return;
+        renderQr(j.data);
+      })
       .catch(function () {});
   }
 
   function loadQr(sessionId) {
     if (!sessionId) return;
+
+    stopQrWatch();
+    activeSessionId = sessionId;
+    lastQrData = null;
+    lastStatus = null;
 
     switchTab('whatsapp');
 
@@ -84,15 +166,39 @@
       box.innerHTML = '<p class="text-sm text-txt-muted animate-pulse-soft">Memuat...</p>';
     }
 
-    if (wsQr) wsQr.close();
-
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     wsQr = new WebSocket(proto + '//' + location.host + '/ws/session/' + sessionId + '/qr');
-    wsQr.onmessage = function (e) { renderQr(JSON.parse(e.data)); };
-    wsQr.onerror = function () { fetchQrFallback(sessionId); };
-    wsQr.onclose = function () { fetchQrFallback(sessionId); };
 
-    setTimeout(function () { fetchQrFallback(sessionId); }, 3000);
+    wsQr.onmessage = function (e) {
+      handleWsMessage(e.data);
+    };
+
+    wsQr.onerror = function () {
+      fetchQrFallback(sessionId);
+    };
+
+    wsQr.onclose = function () {
+      if (activeSessionId === sessionId && lastStatus !== 'connected' && lastStatus !== 'failed') {
+        fetchQrFallback(sessionId);
+      }
+    };
+
+    // Fallback jarang — hanya jika WS lambat pertama kali
+    setTimeout(function () {
+      if (activeSessionId === sessionId && !lastQrData && lastStatus !== 'connected') {
+        fetchQrFallback(sessionId);
+      }
+    }, 4000);
+
+    // Polling cadangan 30 detik (bukan 3–5 detik) agar tidak flicker
+    pollTimer = setInterval(function () {
+      if (activeSessionId !== sessionId) return;
+      if (lastStatus === 'connected' || lastStatus === 'failed') {
+        stopQrWatch();
+        return;
+      }
+      fetchQrFallback(sessionId);
+    }, 30000);
   }
 
   document.querySelectorAll('.btn-show-qr').forEach(function (btn) {

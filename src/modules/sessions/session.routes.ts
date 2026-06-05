@@ -123,14 +123,26 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
 
-    const sendQr = () => {
+    let lastSentQr: string | null = null;
+    let lastSentStatus: string | null = null;
+
+    const sendSnapshot = (force = false) => {
       const qr = sessionManager.getQr(sessionId);
       const status = sessionManager.getStatus(sessionId);
+
+      if (!force && qr === lastSentQr && status === lastSentStatus) return;
+
+      lastSentQr = qr;
+      lastSentStatus = status;
       socket.send(JSON.stringify({ type: 'qr', qr, status }));
+
+      if (status === 'connected' || status === 'failed') {
+        clearInterval(interval);
+      }
     };
 
     void sessionManager.ensureConnection(sessionId).then(() => {
-      sendQr();
+      sendSnapshot(true);
     }).catch(() => {
       socket.send(JSON.stringify({
         type: 'error',
@@ -141,17 +153,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
     const unsubQr = waEventBus.onQr((sid, qr) => {
       if (sid === sessionId) {
+        lastSentQr = qr;
+        lastSentStatus = 'qr_ready';
         socket.send(JSON.stringify({ type: 'qr', qr, status: 'qr_ready' }));
       }
     });
 
-    const unsubStatus = waEventBus.onStatus((sid, status) => {
+    const unsubStatus = waEventBus.onStatus((sid) => {
       if (sid === sessionId) {
-        socket.send(JSON.stringify({ type: 'status', status }));
+        sendSnapshot(true);
       }
     });
 
-    const interval = setInterval(sendQr, 5000);
+    // Heartbeat jarang — hanya jika ada perubahan
+    const interval = setInterval(() => sendSnapshot(false), 20000);
 
     socket.on('close', () => {
       unsubQr();
