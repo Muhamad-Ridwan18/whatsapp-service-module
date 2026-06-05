@@ -15,7 +15,13 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN ?? '24h',
   },
 
-  apiKeyPrefix: process.env.API_KEY_PREFIX ?? 'wsm_',
+  apiKey: {
+    prefix: process.env.API_KEY_PREFIX ?? '',
+    maxLength: Math.min(
+      Math.max(parseInt(process.env.API_KEY_MAX_LENGTH ?? '15', 10), 8),
+      15,
+    ),
+  },
   rateLimit: {
     max: parseInt(process.env.RATE_LIMIT_MAX ?? '100', 10),
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? '60000', 10),

@@ -35,7 +35,7 @@ Default admin (first boot): `admin@localhost` / `changeme123`
 
 ```bash
 curl -X POST http://localhost:3000/api/session/create \
-  -H "Authorization: Bearer wsm_YOUR_API_KEY" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"sessionId": "baytgo"}'
 ```
@@ -44,14 +44,14 @@ curl -X POST http://localhost:3000/api/session/create \
 
 ```bash
 curl http://localhost:3000/api/session/baytgo/qr \
-  -H "Authorization: Bearer wsm_YOUR_API_KEY"
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### Send Message
 
 ```bash
 curl -X POST http://localhost:3000/api/message/send \
-  -H "Authorization: Bearer wsm_YOUR_API_KEY" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "sessionId": "baytgo",
@@ -64,7 +64,7 @@ curl -X POST http://localhost:3000/api/message/send \
 
 ```bash
 curl -X POST http://localhost:3000/api/message/bulk \
-  -H "Authorization: Bearer wsm_YOUR_API_KEY" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [

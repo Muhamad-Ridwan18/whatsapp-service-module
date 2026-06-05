@@ -25,7 +25,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "API Key",
-        "description": "API key dari dashboard. Contoh: `wsm_abc123...`"
+        "description": "API key dari dashboard (max 15 karakter). Contoh: `K7mN2pQx9vB4cRw`"
       },
       "jwt": {
         "type": "http",
@@ -282,8 +282,8 @@
                   "success": true,
                   "data": {
                     "id": 1,
-                    "apiKey": "wsm_abc123full_key_here",
-                    "prefix": "wsm_abc1",
+                    "apiKey": "K7mN2pQx9vB4cRw",
+                    "prefix": "K7mN2p",
                     "warning": "Store this key securely. It will not be shown again."
                   }
                 }
@@ -307,7 +307,7 @@
                     {
                       "id": 1,
                       "name": "Laravel Website",
-                      "prefix": "wsm_abc1",
+                      "prefix": "K7mN2p",
                       "permissions": ["message:send", "session:read"],
                       "webhook_url": "https://your-site.com/webhook/whatsapp",
                       "is_active": true,
