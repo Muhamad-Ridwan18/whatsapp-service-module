@@ -140,6 +140,33 @@
         "message": "Halo dari Laravel"
       }
     },
+    "sendFileViaUrl": {
+      "method": "POST",
+      "url": "/send",
+      "contentType": "application/x-www-form-urlencoded",
+      "note": "File via URL publik (sama seperti Fonnte). URL harus langsung ke file, bukan halaman web.",
+      "fields": {
+        "target": "08987654321",
+        "countryCode": "62",
+        "message": "Invoice terlampir",
+        "url": "https://your-cdn.com/invoices/INV-001.pdf",
+        "filename": "INV-001.pdf"
+      }
+    },
+    "sendFileUpload": {
+      "method": "POST",
+      "url": "/send",
+      "contentType": "multipart/form-data",
+      "note": "Upload file langsung (field file), seperti CURLFile di Fonnte.",
+      "fields": {
+        "target": "08987654321",
+        "countryCode": "62",
+        "message": "Dokumen dari server lokal",
+        "filename": "laporan.pdf",
+        "file": "(binary — file PDF dari disk)"
+      },
+      "laravelExample": "Http::withHeaders(['Authorization' => config('services.fonnte.token')])->attach('file', file_get_contents($path), 'laporan.pdf')->post(config('services.fonnte.url'), ['target' => '08987654321', 'countryCode' => '62', 'message' => 'Dokumen', 'filename' => 'laporan.pdf'])"
+    },
     "sendBulk": {
       "method": "POST",
       "url": "/api/message/bulk",

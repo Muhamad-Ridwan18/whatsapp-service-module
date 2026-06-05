@@ -1,10 +1,19 @@
 import type { ApiKeyRow } from '../../types/index.js';
 import { sessionRepository } from '../../services/database/repositories/session.repository.js';
 import { AppError, ERR } from '../../utils/errors.js';
+import { inferMediaType } from './infer-media-type.js';
 import { sendMessageSchema } from './message.schema.js';
 import type { z } from 'zod';
 
-export type ParsedSendMessage = z.infer<typeof sendMessageSchema>;
+export interface SendFileAttachment {
+  buffer: Buffer;
+  filename?: string;
+  mimetype?: string;
+}
+
+export type ParsedSendMessage = z.infer<typeof sendMessageSchema> & {
+  mediaBuffer?: Buffer;
+};
 
 function pickString(raw: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
@@ -48,6 +57,7 @@ export function resolveSessionForApiKey(apiKey: ApiKeyRow): string {
 export function parseSendRequestBody(
   input: unknown,
   apiKey: ApiKeyRow,
+  file?: SendFileAttachment,
 ): ParsedSendMessage {
   const raw = (input && typeof input === 'object')
     ? (input as Record<string, unknown>)
@@ -64,8 +74,25 @@ export function parseSendRequestBody(
     );
   }
 
-  return sendMessageSchema.parse({
+  const parsed = sendMessageSchema.parse({
     ...raw,
     sessionId: boundSessionId,
   });
+
+  if (!file) {
+    return parsed;
+  }
+
+  return {
+    ...parsed,
+    mediaBuffer: file.buffer,
+    fileName: parsed.fileName ?? file.filename,
+    mimetype: parsed.mimetype ?? file.mimetype,
+    type: inferMediaType({
+      type: parsed.type,
+      fileName: parsed.fileName ?? file.filename,
+      mimetype: parsed.mimetype ?? file.mimetype,
+      mediaUrl: parsed.mediaUrl,
+    }),
+  };
 }

@@ -6,6 +6,7 @@ import { apiKeyAuth, requirePermission } from '../../middleware/auth.js';
 import { z } from 'zod';
 import { parseSendRequestBody } from './send.helper.js';
 import type { ParsedSendMessage } from './send.helper.js';
+import { normalizeUrlFields, readSendRequest } from './read-send-request.js';
 import { assertApiKeySessionAccess } from '../../utils/session-access.js';
 
 function toPayload(body: ParsedSendMessage): MessagePayload {
@@ -13,7 +14,8 @@ function toPayload(body: ParsedSendMessage): MessagePayload {
     type: body.type,
     message: body.message,
     mediaUrl: body.mediaUrl,
-    caption: body.caption,
+    mediaBuffer: body.mediaBuffer,
+    caption: body.caption ?? body.message,
     fileName: body.fileName,
     mimetype: body.mimetype,
     latitude: body.latitude,
@@ -27,7 +29,12 @@ async function handleSendMessage(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<FastifyReply> {
-  const body = parseSendRequestBody(request.body, request.apiKey!);
+  const { body: rawBody, file } = await readSendRequest(request);
+  const body = parseSendRequestBody(
+    normalizeUrlFields(rawBody),
+    request.apiKey!,
+    file,
+  );
   assertApiKeySessionAccess(request.apiKey!, body.sessionId);
 
   const jobId = messageQueue.enqueue(
@@ -62,7 +69,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     schema: {
       tags: ['Messaging'],
       security: [{ apiKey: [] }],
-      description: 'Alias Fonnte. Cukup target, countryCode, message — session dari API key.',
+      description: 'Alias Fonnte. Text: target+message. File: url (publik) atau upload field file (multipart).',
     },
   }, handleSendMessage);
 

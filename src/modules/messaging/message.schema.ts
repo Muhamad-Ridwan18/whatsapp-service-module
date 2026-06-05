@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { resolvePhoneNumber } from '../../utils/phone.js';
+import { inferMediaType } from './infer-media-type.js';
 
 const messageTypeEnum = z.enum([
   'text',
@@ -17,11 +18,20 @@ const recipientFields = {
   countryCode: z.string().min(1).max(5).optional(),
 };
 
+const optionalHttpUrl = z.preprocess(
+  (val) => {
+    if (typeof val !== 'string' || !val.trim()) return undefined;
+    const trimmed = val.trim();
+    return trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+  },
+  z.string().url().optional(),
+);
+
 const mediaFields = {
   message: z.string().optional(),
   type: messageTypeEnum.optional(),
-  mediaUrl: z.string().url().optional(),
-  url: z.string().url().optional(),
+  mediaUrl: optionalHttpUrl,
+  url: optionalHttpUrl,
   caption: z.string().optional(),
   fileName: z.string().optional(),
   filename: z.string().optional(),
@@ -34,16 +44,6 @@ const mediaFields = {
 
 const recipientRefine = (data: { to?: string; target?: string }) =>
   !!data.to?.trim() || !!data.target?.trim();
-
-function inferType(data: {
-  type?: z.infer<typeof messageTypeEnum>;
-  mediaUrl?: string;
-  url?: string;
-}): z.infer<typeof messageTypeEnum> {
-  if (data.type) return data.type;
-  if (data.mediaUrl || data.url) return 'document';
-  return 'text';
-}
 
 function parseSendMessage(data: {
   sessionId: string;
@@ -71,7 +71,13 @@ function parseSendMessage(data: {
 
   const mediaUrl = data.mediaUrl ?? data.url;
   const fileName = data.fileName ?? data.filename;
-  const type = inferType({ type: data.type, mediaUrl, url: data.url });
+  const type = inferMediaType({
+    type: data.type,
+    mediaUrl,
+    url: data.url,
+    fileName,
+    mimetype: data.mimetype,
+  });
 
   return {
     sessionId: data.sessionId,

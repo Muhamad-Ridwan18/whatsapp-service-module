@@ -121,6 +121,7 @@ export interface MessagePayload {
   type: MessageType;
   message?: string;
   mediaUrl?: string;
+  mediaBuffer?: Buffer;
   caption?: string;
   fileName?: string;
   mimetype?: string;
@@ -136,6 +137,7 @@ export interface SendMessageBody {
   message?: string;
   type?: MessageType;
   mediaUrl?: string;
+  mediaBuffer?: Buffer;
   caption?: string;
   fileName?: string;
   mimetype?: string;

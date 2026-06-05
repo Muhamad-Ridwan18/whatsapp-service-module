@@ -35,4 +35,15 @@ describe('sendMessageSchema', () => {
     expect(result.fileName).toBe('invoice.pdf');
     expect(result.type).toBe('document');
   });
+
+  it('detects image type from jpg url', () => {
+    const result = sendMessageSchema.parse({
+      sessionId: 'wa-628123456789',
+      target: '8987654321',
+      countryCode: '62',
+      url: 'https://example.com/photo.png',
+      message: 'Lihat foto',
+    });
+    expect(result.type).toBe('image');
+  });
 });

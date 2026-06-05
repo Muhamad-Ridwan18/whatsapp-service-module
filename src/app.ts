@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import staticPlugin from '@fastify/static';
 import view from '@fastify/view';
@@ -59,6 +60,9 @@ export async function buildApp() {
 
   await app.register(cookie);
   await app.register(formbody);
+  await app.register(multipart, {
+    limits: { fileSize: 16 * 1024 * 1024 },
+  });
   await app.register(websocket);
 
   const publicDir = path.join(process.cwd(), 'public');

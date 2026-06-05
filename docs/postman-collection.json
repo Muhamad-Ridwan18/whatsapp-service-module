@@ -304,6 +304,48 @@
           "response": []
         },
         {
+          "name": "Send File via /send (url)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "target", "value": "08987654321" },
+                { "key": "countryCode", "value": "62" },
+                { "key": "message", "value": "Invoice terlampir" },
+                { "key": "url", "value": "https://example.com/invoice.pdf" },
+                { "key": "filename", "value": "invoice.pdf" }
+              ]
+            },
+            "url": "{{baseUrl}}/send",
+            "description": "Kirim file via URL publik. Field Fonnte: url + filename."
+          },
+          "response": []
+        },
+        {
+          "name": "Send File via /send (upload)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "target", "value": "08987654321", "type": "text" },
+                { "key": "countryCode", "value": "62", "type": "text" },
+                { "key": "message", "value": "Dokumen dari server", "type": "text" },
+                { "key": "filename", "value": "invoice.pdf", "type": "text" },
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/send",
+            "description": "Upload file langsung (multipart field file). Max 16MB."
+          },
+          "response": []
+        },
+        {
           "name": "Send Image",
           "request": {
             "method": "POST",

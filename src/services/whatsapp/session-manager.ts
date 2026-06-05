@@ -422,6 +422,16 @@ class SessionManager {
     return inst.socket;
   }
 
+  private resolveMedia(payload: MessagePayload) {
+    if (payload.mediaBuffer) return payload.mediaBuffer;
+    if (payload.mediaUrl) return { url: payload.mediaUrl };
+    throw new AppError(
+      'Media wajib: kirim `url` (publik) atau upload field `file`',
+      ERR.VALIDATION,
+      422,
+    );
+  }
+
   async sendMessage(
     sessionId: string,
     to: string,
@@ -433,6 +443,7 @@ class SessionManager {
     }
 
     const jid = await resolveRecipientJid(socket, to);
+    const media = this.resolveMedia.bind(this);
     let result: WAMessage | undefined;
 
     switch (payload.type) {
@@ -443,27 +454,28 @@ class SessionManager {
         break;
       case 'image':
         result = await socket.sendMessage(jid, {
-          image: { url: payload.mediaUrl! },
-          caption: payload.caption,
+          image: media(payload),
+          caption: payload.caption ?? payload.message,
         });
         break;
       case 'document':
         result = await socket.sendMessage(jid, {
-          document: { url: payload.mediaUrl! },
-          mimetype: payload.mimetype ?? 'application/pdf',
+          document: media(payload),
+          mimetype: payload.mimetype ?? 'application/octet-stream',
           fileName: payload.fileName ?? 'document',
+          caption: payload.caption ?? payload.message,
         });
         break;
       case 'audio':
         result = await socket.sendMessage(jid, {
-          audio: { url: payload.mediaUrl! },
+          audio: media(payload),
           mimetype: payload.mimetype ?? 'audio/mpeg',
         });
         break;
       case 'video':
         result = await socket.sendMessage(jid, {
-          video: { url: payload.mediaUrl! },
-          caption: payload.caption,
+          video: media(payload),
+          caption: payload.caption ?? payload.message,
         });
         break;
       case 'location':

@@ -53,6 +53,7 @@ class MessageQueue {
         type: item.type ?? 'text',
         message: item.message,
         mediaUrl: item.mediaUrl,
+        mediaBuffer: item.mediaBuffer,
         caption: item.caption,
         fileName: item.fileName,
         mimetype: item.mimetype,
