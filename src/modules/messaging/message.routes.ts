@@ -4,6 +4,7 @@ import type { MessagePayload } from '../../types/index.js';
 import { sendSuccess } from '../../utils/response.js';
 import { apiKeyAuth, requirePermission } from '../../middleware/auth.js';
 import { sendMessageSchema, bulkMessageSchema } from './message.schema.js';
+import { assertApiKeySessionAccess } from '../../utils/session-access.js';
 import type { z } from 'zod';
 
 type ParsedMessage = z.infer<typeof sendMessageSchema>;
@@ -26,14 +27,15 @@ function toPayload(body: ParsedMessage): MessagePayload {
 async function handleSendMessage(
   request: FastifyRequest,
   reply: FastifyReply,
-  apiKeyId?: number,
 ): Promise<FastifyReply> {
   const body = sendMessageSchema.parse(request.body);
+  assertApiKeySessionAccess(request.apiKey!, body.sessionId);
+
   const jobId = messageQueue.enqueue(
     body.sessionId,
     body.to,
     toPayload(body),
-    { apiKeyId },
+    { apiKeyId: request.apiKey?.id },
   );
 
   return sendSuccess(reply, {
@@ -54,11 +56,8 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       security: [{ apiKey: [] }],
       description: 'Kirim pesan WhatsApp via antrian. Nomor: `to` atau `target`+`countryCode`.',
     },
-  }, async (request, reply) => {
-    return handleSendMessage(request, reply, request.apiKey?.id);
-  });
+  }, handleSendMessage);
 
-  // Alias kompatibel Fonnte — JSON atau application/x-www-form-urlencoded
   app.post('/send', {
     preHandler: sendHandlers,
     schema: {
@@ -66,15 +65,17 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       security: [{ apiKey: [] }],
       description: 'Alias Fonnte. Field: target, countryCode, message, url, filename, sessionId.',
     },
-  }, async (request, reply) => {
-    return handleSendMessage(request, reply, request.apiKey?.id);
-  });
+  }, handleSendMessage);
 
   app.post('/api/message/bulk', {
     preHandler: sendHandlers,
     schema: { tags: ['Messaging'], security: [{ apiKey: [] }] },
   }, async (request, reply) => {
     const body = bulkMessageSchema.parse(request.body);
+    for (const msg of body.messages) {
+      assertApiKeySessionAccess(request.apiKey!, msg.sessionId);
+    }
+
     const jobIds = messageQueue.enqueueBulk(
       body.messages,
       request.apiKey?.id,

@@ -7,6 +7,7 @@ import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
 import { apiKeyAuth, jwtAuth, requirePermission } from '../../middleware/auth.js';
 import { createSessionSchema, sessionIdParamSchema } from './session.schema.js';
+import { assertApiKeySessionAccess, canApiKeyAccessSession } from '../../utils/session-access.js';
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/session/create', {
@@ -17,8 +18,15 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     },
   }, async (request, reply) => {
     const body = createSessionSchema.parse(request.body);
+    const apiKey = request.apiKey!;
+    const existing = sessionRepository.findBySessionId(body.sessionId);
+    if (existing && !canApiKeyAccessSession(apiKey, existing)) {
+      throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+    }
+
     await sessionManager.create(body.sessionId, {
-      apiKeyId: request.apiKey?.id,
+      apiKeyId: apiKey.id,
+      userId: apiKey.user_id,
       phoneNumber: body.phoneNumber,
     });
     return sendSuccess(reply, {
@@ -46,6 +54,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Sessions'] },
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+    assertApiKeySessionAccess(request.apiKey!, sessionId);
     const qr = sessionManager.getQr(sessionId);
     if (!qr) {
       const status = sessionManager.getStatus(sessionId);
@@ -62,7 +71,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Sessions'] },
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    const row = sessionRepository.findBySessionId(sessionId);
+    const row = assertApiKeySessionAccess(request.apiKey!, sessionId);
     return sendSuccess(reply, {
       sessionId,
       status: sessionManager.getStatus(sessionId),
@@ -74,8 +83,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/sessions', {
     preHandler: [apiKeyAuth, requirePermission('session:read')],
-  }, async (_request, reply) => {
-    const sessions = sessionRepository.list();
+  }, async (request, reply) => {
+    const sessions = sessionRepository.listByApiKeyId(request.apiKey!.id);
     return sendSuccess(reply, sessions);
   });
 
@@ -83,6 +92,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+    assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.restart(sessionId);
     return sendSuccess(reply, { status: sessionManager.getStatus(sessionId) });
   });
@@ -91,6 +101,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+    assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.disconnect(sessionId);
     return sendSuccess(reply, { status: sessionManager.getStatus(sessionId) });
   });
@@ -99,6 +110,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+    assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.deleteSession(sessionId);
     return sendSuccess(reply, { deleted: true });
   });

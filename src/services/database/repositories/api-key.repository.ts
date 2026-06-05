@@ -23,6 +23,29 @@ export const apiKeyRepository = {
       .all(userId) as ApiKeyRow[];
   },
 
+  findActiveByUserId(userId: number): ApiKeyRow | undefined {
+    return db
+      .getDb()
+      .prepare('SELECT * FROM api_keys WHERE user_id = ? AND is_active = 1 LIMIT 1')
+      .get(userId) as ApiKeyRow | undefined;
+  },
+
+  countActiveByUserId(userId: number): number {
+    const row = db
+      .getDb()
+      .prepare('SELECT COUNT(*) as c FROM api_keys WHERE user_id = ? AND is_active = 1')
+      .get(userId) as { c: number };
+    return row.c;
+  },
+
+  deactivateAllByUserId(userId: number): void {
+    db.getDb()
+      .prepare(
+        `UPDATE api_keys SET is_active = 0, updated_at = datetime('now') WHERE user_id = ? AND is_active = 1`,
+      )
+      .run(userId);
+  },
+
   listAll(): ApiKeyRow[] {
     return db
       .getDb()

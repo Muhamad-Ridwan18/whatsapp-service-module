@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
-import { verifyPassword, generateApiKey } from '../../utils/crypto.js';
+import { verifyPassword } from '../../utils/crypto.js';
+import { createApiKeyForUser } from '../../services/auth/api-key.service.js';
 import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
 import { jwtAuth, requireRole } from '../../middleware/auth.js';
@@ -50,27 +51,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Auth'] },
   }, async (request, reply) => {
     const body = createApiKeySchema.parse(request.body);
-    const { key, hash, prefix } = generateApiKey();
-
-    const id = apiKeyRepository.create({
-      user_id: request.authUser!.sub,
-      key_hash: hash,
-      key_prefix: prefix,
+    const result = createApiKeyForUser(request.authUser!.sub, {
       name: body.name,
-      permissions: body.permissions
-        ? JSON.stringify(body.permissions)
-        : undefined,
+      permissions: body.permissions,
       webhook_url: body.webhook_url,
-      webhook_events: body.webhook_events
-        ? JSON.stringify(body.webhook_events)
-        : undefined,
+      webhook_events: body.webhook_events,
       ip_whitelist: body.ip_whitelist,
     });
 
     return sendSuccess(reply, {
-      id,
-      apiKey: key,
-      prefix,
+      id: result.id,
+      apiKey: result.apiKey,
+      prefix: result.prefix,
+      replacedPrevious: result.replaced,
       warning: 'Store this key securely. It will not be shown again.',
     }, 201);
   });

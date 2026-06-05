@@ -23,6 +23,15 @@ export const sessionRepository = {
       .all(userId) as SessionRow[];
   },
 
+  listByApiKeyId(apiKeyId: number): SessionRow[] {
+    return db
+      .getDb()
+      .prepare(
+        'SELECT * FROM sessions WHERE api_key_id = ? OR user_id = (SELECT user_id FROM api_keys WHERE id = ?) ORDER BY created_at DESC',
+      )
+      .all(apiKeyId, apiKeyId) as SessionRow[];
+  },
+
   count(): number {
     const row = db.getDb().prepare('SELECT COUNT(*) as c FROM sessions').get() as {
       c: number;

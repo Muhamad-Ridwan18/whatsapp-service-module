@@ -22,4 +22,5 @@ export const ERR = {
   RATE_LIMIT: 'ERR_RATE_LIMIT',
   IP_BLOCKED: 'ERR_IP_BLOCKED',
   INTERNAL: 'ERR_INTERNAL',
+  KEY_LIMIT: 'ERR_KEY_LIMIT',
 } as const;

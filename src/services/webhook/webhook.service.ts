@@ -3,6 +3,7 @@ import type { ApiKeyRow, WebhookEvent } from '../../types/index.js';
 import { sleep } from '../../utils/delay.js';
 import { db } from '../database/index.js';
 import { auditRepository } from '../database/repositories/audit.repository.js';
+import { sessionRepository } from '../database/repositories/session.repository.js';
 import { webhookLogger } from '../logger/index.js';
 
 interface WebhookPayload {
@@ -24,13 +25,22 @@ class WebhookService {
     return WebhookService.instance;
   }
 
-  private getActiveKeys(): ApiKeyRow[] {
+  private getKeysForSession(sessionId: string): ApiKeyRow[] {
+    const session = sessionRepository.findBySessionId(sessionId);
+    if (!session) return [];
+
     return db
       .getDb()
       .prepare(
-        'SELECT * FROM api_keys WHERE is_active = 1 AND webhook_url IS NOT NULL',
+        `SELECT * FROM api_keys
+         WHERE is_active = 1
+           AND webhook_url IS NOT NULL
+           AND (
+             id = ?
+             OR user_id = ?
+           )`,
       )
-      .all() as ApiKeyRow[];
+      .all(session.api_key_id ?? -1, session.user_id ?? -1) as ApiKeyRow[];
   }
 
   async dispatch(
@@ -38,7 +48,7 @@ class WebhookService {
     sessionId: string,
     data: Record<string, unknown>,
   ): Promise<void> {
-    const keys = this.getActiveKeys();
+    const keys = this.getKeysForSession(sessionId);
 
     for (const key of keys) {
       let events: WebhookEvent[] = [];

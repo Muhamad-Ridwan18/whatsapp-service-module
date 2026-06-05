@@ -3,8 +3,9 @@ import { config } from '../../config/index.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
-import { verifyPassword, generateApiKey, hashPassword } from '../../utils/crypto.js';
+import { verifyPassword, hashPassword } from '../../utils/crypto.js';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
+import { createApiKeyForUser } from '../../services/auth/api-key.service.js';
 import { createApiKeySchema } from '../auth/auth.schema.js';
 import { createSessionSchema, sessionIdParamSchema } from '../sessions/session.schema.js';
 import { AppError, ERR } from '../../utils/errors.js';
@@ -264,29 +265,26 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       return reply.redirect('/dashboard?error=invalid_input');
     }
 
-    const { key, hash, prefix } = generateApiKey();
-    apiKeyRepository.create({
-      user_id: request.authUser!.sub,
-      key_hash: hash,
-      key_prefix: prefix,
+    const created = createApiKeyForUser(request.authUser!.sub, {
       name: parsed.data.name,
-      permissions: JSON.stringify(parsed.data.permissions ?? [
+      permissions: parsed.data.permissions ?? [
         'message:send',
         'session:read',
         'session:create',
         'session:manage',
-      ]),
+      ],
       webhook_url: parsed.data.webhook_url,
-      webhook_events: parsed.data.webhook_events
-        ? JSON.stringify(parsed.data.webhook_events)
-        : undefined,
+      webhook_events: parsed.data.webhook_events,
     });
 
     const ctx = getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
       activeTab: 'apikeys',
-      newApiKey: key,
+      newApiKey: created.apiKey,
+      successMessage: created.replaced
+        ? 'API key baru dibuat. Key lama otomatis dinonaktifkan.'
+        : 'API key berhasil dibuat.',
     });
 
     return reply.view('dashboard.ejs', ctx);
