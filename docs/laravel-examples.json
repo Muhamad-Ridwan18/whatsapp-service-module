@@ -1,0 +1,211 @@
+{
+  "description": "Contoh request JSON untuk integrasi Laravel / PHP",
+  "fonnteMigration": {
+    "auth": {
+      "fonnte": "Authorization: {token}",
+      "wsm": "Authorization: Bearer {apiKey} atau Authorization: {apiKey}"
+    },
+    "recipient": {
+      "fonnte": { "target": "08987654321", "countryCode": "62" },
+      "wsm_equivalent": { "target": "08987654321", "countryCode": "62" },
+      "wsm_alternative": { "to": "628987654321" }
+    },
+    "attachment": {
+      "fonnte": { "url": "https://...", "filename": "file.pdf" },
+      "wsm_equivalent": { "url": "https://...", "filename": "file.pdf" },
+      "wsm_native": { "mediaUrl": "https://...", "fileName": "file.pdf", "type": "document" }
+    },
+    "endpoint": {
+      "fonnte": "POST /send",
+      "wsm": "POST /api/message/send atau POST /send (alias)"
+    }
+  },
+  "baseUrl": "https://whatsapp.baytgo.id",
+  "auth": {
+    "header": "Authorization",
+    "value": "Bearer YOUR_API_KEY"
+  },
+  "env": {
+    "WHATSAPP_API_URL": "https://whatsapp.baytgo.id",
+    "WHATSAPP_API_KEY": "wsm_your_key_here",
+    "WHATSAPP_SESSION_ID": "wa-628123456789"
+  },
+  "endpoints": {
+    "createSession": {
+      "method": "POST",
+      "url": "/api/session/create",
+      "body": {
+        "phoneNumber": "628123456789",
+        "sessionId": "wa-628123456789"
+      },
+      "response": {
+        "success": true,
+        "data": {
+          "sessionId": "wa-628123456789",
+          "phoneNumber": "628123456789",
+          "status": "initializing"
+        }
+      }
+    },
+    "getQr": {
+      "method": "GET",
+      "url": "/api/session/wa-628123456789/qr",
+      "response": {
+        "success": true,
+        "data": {
+          "qr": "BASE64_PNG_STRING",
+          "status": "qr_ready"
+        }
+      }
+    },
+    "getStatus": {
+      "method": "GET",
+      "url": "/api/session/wa-628123456789/status",
+      "response": {
+        "success": true,
+        "data": {
+          "sessionId": "wa-628123456789",
+          "status": "connected",
+          "phone_number": "628123456789",
+          "display_name": "Nama Bisnis",
+          "last_connected_at": "2026-06-05 10:00:00"
+        }
+      }
+    },
+    "sendText": {
+      "method": "POST",
+      "url": "/api/message/send",
+      "body": {
+        "sessionId": "wa-628123456789",
+        "to": "628987654321",
+        "type": "text",
+        "message": "Halo, pesanan Anda sudah dikirim!"
+      },
+      "bodyFonnteStyle": {
+        "sessionId": "wa-628123456789",
+        "target": "08987654321",
+        "countryCode": "62",
+        "message": "Halo, pesanan Anda sudah dikirim!"
+      },
+      "response": {
+        "success": true,
+        "data": {
+          "success": true,
+          "jobId": "550e8400-e29b-41d4-a716-446655440000",
+          "message": "Message queued for delivery"
+        }
+      }
+    },
+    "sendImage": {
+      "method": "POST",
+      "url": "/api/message/send",
+      "body": {
+        "sessionId": "wa-628123456789",
+        "to": "628987654321",
+        "type": "image",
+        "mediaUrl": "https://your-cdn.com/products/item-1.jpg",
+        "caption": "Produk terbaru kami"
+      }
+    },
+    "sendDocument": {
+      "method": "POST",
+      "url": "/api/message/send",
+      "body": {
+        "sessionId": "wa-628123456789",
+        "to": "628987654321",
+        "type": "document",
+        "mediaUrl": "https://your-cdn.com/invoices/INV-001.pdf",
+        "fileName": "INV-001.pdf",
+        "mimetype": "application/pdf",
+        "caption": "Invoice pesanan #001"
+      },
+      "bodyFonnteStyle": {
+        "sessionId": "wa-628123456789",
+        "target": "8987654321",
+        "countryCode": "62",
+        "url": "https://your-cdn.com/invoices/INV-001.pdf",
+        "filename": "INV-001.pdf",
+        "caption": "Invoice pesanan #001"
+      }
+    },
+    "sendFonnteAlias": {
+      "method": "POST",
+      "url": "/send",
+      "contentType": "application/x-www-form-urlencoded",
+      "note": "Alias kompatibel Fonnte. Auth: Authorization: {apiKey} atau Bearer {apiKey}",
+      "fields": {
+        "sessionId": "wa-628123456789",
+        "target": "08987654321",
+        "countryCode": "62",
+        "message": "Halo dari Laravel"
+      }
+    },
+    "sendBulk": {
+      "method": "POST",
+      "url": "/api/message/bulk",
+      "body": {
+        "messages": [
+          {
+            "sessionId": "wa-628123456789",
+            "to": "628111111111",
+            "type": "text",
+            "message": "Promo hari ini!",
+            "priority": 5
+          },
+          {
+            "sessionId": "wa-628123456789",
+            "to": "628222222222",
+            "type": "text",
+            "message": "Promo hari ini!",
+            "priority": 3
+          }
+        ]
+      }
+    }
+  },
+  "webhook": {
+    "description": "WSM mengirim POST ke webhook_url saat event terjadi",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "payloadExample": {
+      "event": "message.received",
+      "sessionId": "wa-628123456789",
+      "timestamp": "2026-06-05T10:30:00.000Z",
+      "data": {
+        "from": "628987654321",
+        "message": "Halo, saya mau order",
+        "messageId": "3EB0XXXX"
+      }
+    },
+    "events": [
+      "message.received",
+      "message.sent",
+      "message.delivered",
+      "message.read",
+      "session.connected",
+      "session.disconnected",
+      "qr.updated"
+    ]
+  },
+  "laravelHttpExample": {
+    "description": "Contoh Http:: facade Laravel",
+    "code": "Http::withToken(config('whatsapp.api_key'))\n    ->post(config('whatsapp.url') . '/api/message/send', [\n        'sessionId' => config('whatsapp.session_id'),\n        'to'        => '628987654321',\n        'type'      => 'text',\n        'message'   => 'Halo dari Laravel',\n    ])\n    ->json();"
+  },
+  "permissions": {
+    "message:send": "Kirim pesan",
+    "session:read": "Baca status & QR",
+    "session:create": "Buat session baru",
+    "session:manage": "Reconnect, disconnect, delete",
+    "wildcard": "* = semua permission"
+  },
+  "sessionStatuses": [
+    "initializing",
+    "qr_ready",
+    "connected",
+    "disconnected",
+    "reconnecting",
+    "failed"
+  ]
+}

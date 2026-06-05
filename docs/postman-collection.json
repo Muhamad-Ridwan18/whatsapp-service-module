@@ -1,0 +1,380 @@
+{
+  "info": {
+    "name": "WhatsApp Service Module API",
+    "description": "API untuk integrasi Laravel / backend lain.\n\n**Autentikasi integrasi:** `Authorization: Bearer {{apiKey}}`\n\n**Autentikasi admin (JWT):** login dulu, pakai `{{jwtToken}}` untuk endpoint admin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://whatsapp.baytgo.id",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "wsm_your_api_key_here",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "wa-628123456789",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{apiKey}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Cek status server, memory, session, dan antrian pesan."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "  pm.collectionVariables.set('jwtToken', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@localhost\",\n  \"password\": \"changeme123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Login admin untuk mendapatkan JWT token."
+          },
+          "response": []
+        },
+        {
+          "name": "Create API Key",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{jwtToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Laravel Website\",\n  \"webhook_url\": \"https://your-site.com/webhook/whatsapp\",\n  \"permissions\": [\n    \"message:send\",\n    \"session:read\",\n    \"session:create\",\n    \"session:manage\"\n  ],\n  \"webhook_events\": [\n    \"message.received\",\n    \"message.sent\",\n    \"session.connected\",\n    \"session.disconnected\",\n    \"qr.updated\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/api-keys",
+            "description": "Buat API key baru. Key hanya ditampilkan sekali di response `data.apiKey`."
+          },
+          "response": []
+        },
+        {
+          "name": "List API Keys",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{jwtToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/api-keys"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{jwtToken}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/api-keys/1",
+            "description": "Nonaktifkan API key berdasarkan ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "Create Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"628123456789\",\n  \"sessionId\": \"wa-628123456789\"\n}"
+            },
+            "url": "{{baseUrl}}/api/session/create",
+            "description": "Buat session. `phoneNumber` (E.164) atau `target`+`countryCode`."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Session (target + countryCode)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"08123456789\",\n  \"countryCode\": \"62\"\n}"
+            },
+            "url": "{{baseUrl}}/api/session/create",
+            "description": "Gaya Fonnte — sessionId otomatis: wa-628123456789"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Session (Admin JWT)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{jwtToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"628123456789\"\n}"
+            },
+            "url": "{{baseUrl}}/api/session/create/admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Get QR Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/session/{{sessionId}}/qr",
+            "description": "Ambil QR base64 untuk scan WhatsApp."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/session/{{sessionId}}/status"
+          },
+          "response": []
+        },
+        {
+          "name": "List All Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sessions"
+          },
+          "response": []
+        },
+        {
+          "name": "Reconnect Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/session/{{sessionId}}/reconnect"
+          },
+          "response": []
+        },
+        {
+          "name": "Disconnect Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/session/{{sessionId}}/disconnect"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/session/{{sessionId}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messaging",
+      "item": [
+        {
+          "name": "Send Text (to E.164)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"to\": \"628987654321\",\n  \"type\": \"text\",\n  \"message\": \"Halo, ini pesan dari API\"\n}"
+            },
+            "url": "{{baseUrl}}/api/message/send",
+            "description": "Format WSM: `to` = E.164 tanpa +"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Text (target + countryCode)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"target\": \"08987654321\",\n  \"countryCode\": \"62\",\n  \"message\": \"Halo, gaya Fonnte\"\n}"
+            },
+            "url": "{{baseUrl}}/api/message/send",
+            "description": "Format Fonnte: `target` domestik + `countryCode` (default 62 jika kosong)"
+          },
+          "response": []
+        },
+        {
+          "name": "Send via /send (Fonnte alias)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "sessionId", "value": "{{sessionId}}" },
+                { "key": "target", "value": "08987654321" },
+                { "key": "countryCode", "value": "62" },
+                { "key": "message", "value": "Halo dari form-urlencoded" }
+              ]
+            },
+            "url": "{{baseUrl}}/send",
+            "description": "Alias endpoint Fonnte. Auth bisa `Authorization: {{apiKey}}` tanpa Bearer."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"to\": \"628987654321\",\n  \"type\": \"image\",\n  \"mediaUrl\": \"https://example.com/image.jpg\",\n  \"caption\": \"Foto produk\"\n}"
+            },
+            "url": "{{baseUrl}}/api/message/send"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"to\": \"628987654321\",\n  \"type\": \"document\",\n  \"mediaUrl\": \"https://example.com/file.pdf\",\n  \"fileName\": \"invoice.pdf\",\n  \"mimetype\": \"application/pdf\",\n  \"caption\": \"Invoice bulan ini\"\n}"
+            },
+            "url": "{{baseUrl}}/api/message/send"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"to\": \"628987654321\",\n  \"type\": \"location\",\n  \"latitude\": -6.2088,\n  \"longitude\": 106.8456,\n  \"message\": \"Lokasi kantor\"\n}"
+            },
+            "url": "{{baseUrl}}/api/message/send"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Bulk Messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"sessionId\": \"{{sessionId}}\",\n      \"to\": \"628111111111\",\n      \"type\": \"text\",\n      \"message\": \"Pesan 1\",\n      \"priority\": 5\n    },\n    {\n      \"sessionId\": \"{{sessionId}}\",\n      \"to\": \"628222222222\",\n      \"type\": \"text\",\n      \"message\": \"Pesan 2\",\n      \"priority\": 3\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/message/bulk",
+            "description": "Kirim banyak pesan sekaligus (maks 100)."
+          },
+          "response": []
+        },
+        {
+          "name": "Queue Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/message/queue/stats"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

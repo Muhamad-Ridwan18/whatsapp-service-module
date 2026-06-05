@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolvePhoneNumber } from '../../utils/phone.js';
 
 const messageTypeEnum = z.enum([
   'text',
@@ -10,23 +11,108 @@ const messageTypeEnum = z.enum([
   'contact',
 ]);
 
-export const sendMessageSchema = z.object({
-  sessionId: z.string().min(2).max(50),
-  to: z.string().min(8).max(20),
+const recipientFields = {
+  to: z.string().min(8).max(20).optional(),
+  target: z.string().min(7).max(15).optional(),
+  countryCode: z.string().min(1).max(5).optional(),
+};
+
+const mediaFields = {
   message: z.string().optional(),
-  type: messageTypeEnum.default('text'),
+  type: messageTypeEnum.optional(),
   mediaUrl: z.string().url().optional(),
+  url: z.string().url().optional(),
   caption: z.string().optional(),
   fileName: z.string().optional(),
+  filename: z.string().optional(),
   mimetype: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   contactName: z.string().optional(),
   contactNumber: z.string().optional(),
+};
+
+const recipientRefine = (data: { to?: string; target?: string }) =>
+  !!data.to?.trim() || !!data.target?.trim();
+
+function inferType(data: {
+  type?: z.infer<typeof messageTypeEnum>;
+  mediaUrl?: string;
+  url?: string;
+}): z.infer<typeof messageTypeEnum> {
+  if (data.type) return data.type;
+  if (data.mediaUrl || data.url) return 'document';
+  return 'text';
+}
+
+function parseSendMessage(data: {
+  sessionId: string;
+  to?: string;
+  target?: string;
+  countryCode?: string;
+  message?: string;
+  type?: z.infer<typeof messageTypeEnum>;
+  mediaUrl?: string;
+  url?: string;
+  caption?: string;
+  fileName?: string;
+  filename?: string;
+  mimetype?: string;
+  latitude?: number;
+  longitude?: number;
+  contactName?: string;
+  contactNumber?: string;
+}) {
+  const to = resolvePhoneNumber({
+    to: data.to,
+    target: data.target,
+    countryCode: data.countryCode,
+  });
+
+  const mediaUrl = data.mediaUrl ?? data.url;
+  const fileName = data.fileName ?? data.filename;
+  const type = inferType({ type: data.type, mediaUrl, url: data.url });
+
+  return {
+    sessionId: data.sessionId,
+    to,
+    message: data.message,
+    type,
+    mediaUrl,
+    caption: data.caption,
+    fileName,
+    mimetype: data.mimetype,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    contactName: data.contactName,
+    contactNumber: data.contactNumber
+      ? resolvePhoneNumber({ to: data.contactNumber })
+      : undefined,
+  };
+}
+
+const baseSendMessageSchema = z.object({
+  sessionId: z.string().min(2).max(50),
+  ...recipientFields,
+  ...mediaFields,
 });
 
+export const sendMessageSchema = baseSendMessageSchema
+  .refine(recipientRefine, {
+    message: 'Isi `to` (E.164 tanpa +) atau `target` (+ `countryCode`, default 62)',
+  })
+  .transform(parseSendMessage);
+
 export const bulkMessageSchema = z.object({
-  messages: z.array(sendMessageSchema.extend({
-    priority: z.number().int().min(0).max(10).optional(),
-  })).min(1).max(100),
+  messages: z.array(
+    baseSendMessageSchema
+      .extend({ priority: z.number().int().min(0).max(10).optional() })
+      .refine(recipientRefine, {
+        message: 'Isi `to` atau `target` (+ `countryCode`)',
+      })
+      .transform((msg) => ({
+        ...parseSendMessage(msg),
+        priority: msg.priority,
+      })),
+  ).min(1).max(100),
 });

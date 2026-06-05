@@ -1,0 +1,576 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "WhatsApp Service Module API",
+    "description": "Microservice WhatsApp untuk integrasi Laravel dan backend lain.\n\n## Autentikasi\n\n| Tipe | Header | Digunakan untuk |\n|------|--------|-----------------|\n| API Key | `Authorization: Bearer <API_KEY>` | Endpoint `/api/*` integrasi |\n| JWT | `Authorization: Bearer <JWT>` | Login admin, kelola API key |\n\n## Format Response\n\n```json\n{ \"success\": true, \"data\": { ... } }\n{ \"success\": false, \"message\": \"...\", \"code\": \"ERR_...\" }\n```",
+    "version": "1.0.0",
+    "contact": {
+      "name": "WSM Dashboard",
+      "url": "/dashboard"
+    }
+  },
+  "servers": [
+    { "url": "https://whatsapp.baytgo.id", "description": "Production" },
+    { "url": "http://localhost:3000", "description": "Local development" }
+  ],
+  "tags": [
+    { "name": "Health", "description": "Status server" },
+    { "name": "Auth", "description": "Login JWT & manajemen API key" },
+    { "name": "Sessions", "description": "Kelola koneksi WhatsApp" },
+    { "name": "Messaging", "description": "Kirim pesan" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "API key dari dashboard. Contoh: `wsm_abc123...`"
+      },
+      "jwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token dari POST /api/auth/login"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": { "type": "object" }
+        },
+        "required": ["success"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "code": {
+            "type": "string",
+            "enum": [
+              "ERR_UNAUTHORIZED",
+              "ERR_FORBIDDEN",
+              "ERR_NOT_FOUND",
+              "ERR_VALIDATION",
+              "ERR_SESSION_EXISTS",
+              "ERR_SESSION_NOT_FOUND",
+              "ERR_SESSION_LIMIT",
+              "ERR_SESSION_NOT_CONNECTED",
+              "ERR_MESSAGE_FAILED",
+              "ERR_RATE_LIMIT",
+              "ERR_IP_BLOCKED",
+              "ERR_INTERNAL"
+            ]
+          }
+        },
+        "required": ["success", "message", "code"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "admin@localhost" },
+          "password": { "type": "string", "minLength": 6, "example": "changeme123" }
+        }
+      },
+      "CreateApiKeyRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 100, "example": "Laravel Website" },
+          "permissions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["message:send", "session:read", "session:create", "session:manage"]
+          },
+          "webhook_url": { "type": "string", "format": "uri", "nullable": true, "example": "https://your-site.com/webhook/whatsapp" },
+          "webhook_events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "message.received",
+                "message.sent",
+                "message.delivered",
+                "message.read",
+                "session.connected",
+                "session.disconnected",
+                "qr.updated"
+              ]
+            }
+          },
+          "ip_whitelist": { "type": "string", "nullable": true, "example": "192.168.1.1,10.0.0.1" }
+        }
+      },
+      "CreateSessionRequest": {
+        "type": "object",
+        "required": ["phoneNumber"],
+        "properties": {
+          "phoneNumber": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 16,
+            "description": "Format internasional tanpa +. Contoh: 628123456789",
+            "example": "628123456789"
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "Opsional. Default: wa-{phoneNumber}",
+            "example": "wa-628123456789"
+          }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "required": ["sessionId", "to"],
+        "properties": {
+          "sessionId": { "type": "string", "example": "wa-628123456789" },
+          "to": { "type": "string", "minLength": 8, "maxLength": 20, "example": "628987654321" },
+          "type": {
+            "type": "string",
+            "enum": ["text", "image", "document", "audio", "video", "location", "contact"],
+            "default": "text"
+          },
+          "message": { "type": "string", "example": "Halo dari API" },
+          "mediaUrl": { "type": "string", "format": "uri" },
+          "caption": { "type": "string" },
+          "fileName": { "type": "string" },
+          "mimetype": { "type": "string" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "contactName": { "type": "string" },
+          "contactNumber": { "type": "string" }
+        }
+      },
+      "BulkMessageRequest": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "allOf": [
+                { "$ref": "#/components/schemas/SendMessageRequest" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "priority": { "type": "integer", "minimum": 0, "maximum": 10 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": ["initializing", "qr_ready", "connected", "disconnected", "reconnecting", "failed"]
+      },
+      "WebhookPayload": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "message.received",
+              "message.sent",
+              "message.delivered",
+              "message.read",
+              "session.connected",
+              "session.disconnected",
+              "qr.updated"
+            ]
+          },
+          "sessionId": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "data": { "type": "object" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Server OK",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "ok",
+                  "memory": { "rss": "85MB", "heapUsed": "42MB", "heapTotal": "64MB" },
+                  "cpu": { "load1m": "0.12", "load5m": "0.08", "cores": 4 },
+                  "uptime": "3600s",
+                  "sessions": ["wa-628123456789"],
+                  "stats": {
+                    "total": 1,
+                    "connected": 1,
+                    "queue": { "pending": 0, "processing": 0, "failed": 0 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login admin (JWT)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login berhasil",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiIs...",
+                    "user": {
+                      "id": 1,
+                      "email": "admin@localhost",
+                      "name": "Admin",
+                      "role": "super_admin"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Kredensial salah", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/auth/api-keys": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Buat API key",
+        "security": [{ "jwt": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateApiKeyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API key dibuat",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": 1,
+                    "apiKey": "wsm_abc123full_key_here",
+                    "prefix": "wsm_abc1",
+                    "warning": "Store this key securely. It will not be shown again."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Daftar API key",
+        "security": [{ "jwt": [] }],
+        "responses": {
+          "200": {
+            "description": "Daftar key milik user",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": [
+                    {
+                      "id": 1,
+                      "name": "Laravel Website",
+                      "prefix": "wsm_abc1",
+                      "permissions": ["message:send", "session:read"],
+                      "webhook_url": "https://your-site.com/webhook/whatsapp",
+                      "is_active": true,
+                      "last_used_at": "2026-06-05 10:00:00",
+                      "created_at": "2026-06-01 08:00:00"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/api-keys/{id}": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "Nonaktifkan API key",
+        "security": [{ "jwt": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key dinonaktifkan",
+            "content": {
+              "application/json": {
+                "example": { "success": true, "data": { "revoked": true } }
+              }
+            }
+          },
+          "404": { "description": "Key tidak ditemukan" }
+        }
+      }
+    },
+    "/api/session/create": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Buat session WhatsApp",
+        "security": [{ "apiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session dibuat",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "sessionId": "wa-628123456789",
+                    "phoneNumber": "628123456789",
+                    "status": "initializing"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session/create/admin": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Buat session (admin JWT)",
+        "security": [{ "jwt": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Session dibuat" } }
+      }
+    },
+    "/api/session/{sessionId}/qr": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "Ambil QR code (base64)",
+        "security": [{ "apiKey": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "QR tersedia",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "qr": "iVBORw0KGgoAAAANSUhEUgAA...",
+                    "status": "qr_ready"
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "QR belum tersedia" }
+        }
+      }
+    },
+    "/api/session/{sessionId}/status": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "Status session",
+        "security": [{ "apiKey": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status session",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "sessionId": "wa-628123456789",
+                    "status": "connected",
+                    "phone_number": "628123456789",
+                    "display_name": "Toko Saya",
+                    "last_connected_at": "2026-06-05 09:00:00"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions": {
+      "get": {
+        "tags": ["Sessions"],
+        "summary": "Daftar semua session",
+        "security": [{ "apiKey": [] }],
+        "responses": { "200": { "description": "Daftar session" } }
+      }
+    },
+    "/api/session/{sessionId}/reconnect": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Sambung ulang session",
+        "security": [{ "apiKey": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Reconnect dimulai" } }
+      }
+    },
+    "/api/session/{sessionId}/disconnect": {
+      "post": {
+        "tags": ["Sessions"],
+        "summary": "Putuskan session",
+        "security": [{ "apiKey": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Session terputus" } }
+      }
+    },
+    "/api/session/{sessionId}": {
+      "delete": {
+        "tags": ["Sessions"],
+        "summary": "Hapus session",
+        "security": [{ "apiKey": [] }],
+        "parameters": [
+          { "name": "sessionId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Session dihapus" } }
+      }
+    },
+    "/api/message/send": {
+      "post": {
+        "tags": ["Messaging"],
+        "summary": "Kirim pesan (antrian)",
+        "security": [{ "apiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pesan masuk antrian",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "success": true,
+                    "jobId": "550e8400-e29b-41d4-a716-446655440000",
+                    "message": "Message queued for delivery"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/message/bulk": {
+      "post": {
+        "tags": ["Messaging"],
+        "summary": "Kirim banyak pesan",
+        "security": [{ "apiKey": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BulkMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pesan masuk antrian",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": {
+                    "success": true,
+                    "queued": 2,
+                    "jobIds": ["uuid-1", "uuid-2"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/message/queue/stats": {
+      "get": {
+        "tags": ["Messaging"],
+        "summary": "Statistik antrian pesan",
+        "security": [{ "apiKey": [] }],
+        "responses": {
+          "200": {
+            "description": "Statistik antrian",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": { "pending": 0, "processing": 1, "failed": 0 }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

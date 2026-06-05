@@ -30,11 +30,14 @@ export async function apiKeyAuth(
   _reply: FastifyReply,
 ): Promise<void> {
   const header = request.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
+  if (!header?.trim()) {
     throw new AppError('API key required', ERR.UNAUTHORIZED, 401);
   }
 
-  const key = header.slice(7).trim();
+  // Bearer token (WSM) atau raw token (kompatibel gaya Fonnte)
+  const key = header.startsWith('Bearer ')
+    ? header.slice(7).trim()
+    : header.trim();
   const keyHash = hashApiKey(key);
   const apiKey = apiKeyRepository.findByHash(keyHash);
 
