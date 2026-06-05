@@ -1,44 +1,51 @@
 <!DOCTYPE html>
 <html lang="id" class="dark">
 <head>
-  <%- include('partials/head', { title: 'Settings' }) %>
+  <%- include('partials/head', { title: 'Profil' }) %>
 </head>
 <body class="bg-surface min-h-screen font-sans text-gray-200">
   <%- include('partials/nav', { currentUser, activePage: 'settings' }) %>
 
-  <main class="max-w-lg mx-auto px-4 py-6 space-y-4">
-    <% if (errorMessage) { %>
-      <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"><%= errorMessage %></div>
-    <% } %>
-    <% if (successMessage) { %>
-      <div class="p-3 rounded-lg bg-accent/10 border border-accent/40 text-accent text-sm"><%= successMessage %></div>
-    <% } %>
+  <main class="max-w-lg mx-auto px-4 py-6">
+    <header class="mb-6">
+      <h1 class="text-xl font-bold text-white">Profil &amp; Keamanan</h1>
+      <p class="text-sm text-gray-500 mt-1">Kelola akun dan password Anda.</p>
+    </header>
 
-    <div class="card">
-      <h2 class="text-sm font-semibold text-white mb-3">Ubah Password</h2>
-      <form method="POST" action="/dashboard/settings/password" class="space-y-3">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Password saat ini</label>
-          <input type="password" name="currentPassword" class="input-field w-full" required>
+    <%- include('partials/alerts') %>
+
+    <div class="card mb-4">
+      <h2 class="section-title mb-4">Info Akun</h2>
+      <dl class="space-y-3 text-sm">
+        <div class="flex justify-between py-2 border-b border-surface-200/50">
+          <dt class="text-gray-500">Email</dt>
+          <dd class="text-white"><%= currentUser.email %></dd>
         </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Password baru</label>
-          <input type="password" name="newPassword" minlength="6" class="input-field w-full" required>
+        <div class="flex justify-between py-2">
+          <dt class="text-gray-500">Peran</dt>
+          <dd><span class="badge-success"><%= roleLabel %></span></dd>
         </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Konfirmasi password baru</label>
-          <input type="password" name="confirmPassword" minlength="6" class="input-field w-full" required>
-        </div>
-        <button type="submit" class="btn-primary w-full">Simpan Password</button>
-      </form>
+      </dl>
     </div>
 
     <div class="card">
-      <h2 class="text-sm font-semibold text-white mb-2">Info Akun</h2>
-      <dl class="text-sm space-y-1">
-        <div class="flex justify-between"><dt class="text-gray-500">Email</dt><dd><%= currentUser.email %></dd></div>
-        <div class="flex justify-between"><dt class="text-gray-500">Role</dt><dd class="text-accent"><%= currentUser.role %></dd></div>
-      </dl>
+      <h2 class="section-title mb-1">Ubah Password</h2>
+      <p class="section-desc mb-4">Gunakan password kuat minimal 6 karakter.</p>
+      <form method="POST" action="/dashboard/settings/password" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password saat ini</label>
+          <input type="password" name="currentPassword" class="input-field" required autocomplete="current-password">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password baru</label>
+          <input type="password" name="newPassword" minlength="6" class="input-field" required autocomplete="new-password">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Ulangi password baru</label>
+          <input type="password" name="confirmPassword" minlength="6" class="input-field" required autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-primary w-full">Simpan Password</button>
+      </form>
     </div>
   </main>
 </body>

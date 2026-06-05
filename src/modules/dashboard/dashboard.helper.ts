@@ -8,6 +8,7 @@ import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import type { JwtPayload, UserRole } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
+import { auditActionLabel, sessionStatusLabel } from '../../utils/labels.js';
 
 export async function verifyDashboardCookie(
   request: FastifyRequest,
@@ -98,6 +99,20 @@ export function getDashboardContext(authUser: JwtPayload, extras?: Record<string
     auditLogs: auditRepository.recent(50),
     users:
       authUser.role === 'super_admin' ? userRepository.list() : [],
+    sessionStatus: {
+      connected: sessionStatusLabel('connected'),
+      qr_ready: sessionStatusLabel('qr_ready'),
+      initializing: sessionStatusLabel('initializing'),
+      reconnecting: sessionStatusLabel('reconnecting'),
+      disconnected: sessionStatusLabel('disconnected'),
+      failed: sessionStatusLabel('failed'),
+    },
+    auditLabels: {
+      'api.request': auditActionLabel('api.request'),
+      'webhook.failed': auditActionLabel('webhook.failed'),
+      'user.request': auditActionLabel('user.request'),
+    },
+    activeTab: 'whatsapp',
     ...extras,
   };
 }

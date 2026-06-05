@@ -1,37 +1,36 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="id" class="dark">
 <head>
-  <%- include('partials/head', { title: title || 'Login' }) %>
+  <%- include('partials/head', { title: 'Masuk' }) %>
 </head>
 <body class="bg-surface min-h-screen flex items-center justify-center p-4 font-sans">
-  <div class="w-full max-w-sm">
+  <div class="w-full max-w-md">
     <div class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent/20 text-accent text-xl font-bold mb-3">WS</div>
-      <h1 class="text-xl font-semibold text-white">WhatsApp Service</h1>
-      <p class="text-gray-500 text-sm mt-1">Admin Dashboard</p>
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/20 text-accent text-xl font-bold mb-4">WA</div>
+      <h1 class="text-2xl font-bold text-white">WhatsApp Service</h1>
+      <p class="text-gray-500 text-sm mt-2">Masuk ke panel admin untuk mengelola koneksi WhatsApp</p>
     </div>
 
     <div class="card">
       <% if (typeof error !== 'undefined' && error) { %>
-        <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"><%= error %></div>
+        <div class="alert alert-error mb-4">Email atau password salah</div>
       <% } %>
 
       <form method="POST" action="/login" class="space-y-4">
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Email</label>
-          <input type="email" name="email" required class="input-field" placeholder="admin@localhost">
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+          <input type="email" name="email" required class="input-field" placeholder="admin@localhost" autocomplete="email">
         </div>
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Password</label>
-          <input type="password" name="password" required class="input-field" placeholder="••••••••">
+          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+          <input type="password" name="password" required class="input-field" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <button type="submit" class="btn-primary w-full">Sign In</button>
+        <button type="submit" class="btn-primary w-full">Masuk</button>
       </form>
     </div>
 
     <p class="text-center text-xs text-gray-600 mt-6">
-      <a href="/docs" class="text-accent hover:underline">API Docs</a> ·
-      <a href="/health" class="text-gray-500 hover:text-gray-400">Health</a>
+      <a href="/docs" class="text-accent hover:underline">Dokumentasi API</a>
     </p>
   </div>
 </body>

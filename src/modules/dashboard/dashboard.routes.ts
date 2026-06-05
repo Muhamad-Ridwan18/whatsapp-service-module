@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '../../config/index.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
-import { waEventBus } from '../../services/whatsapp/event-bus.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
 import { verifyPassword, generateApiKey, hashPassword } from '../../utils/crypto.js';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
@@ -12,10 +11,10 @@ import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
 import {
   verifyDashboardCookie,
-  verifyWsCookie,
   requireDashboardRole,
   getDashboardContext,
 } from './dashboard.helper.js';
+import { roleLabel } from '../../utils/labels.js';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: 'Input tidak valid',
@@ -67,12 +66,13 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const query = request.query as { scan?: string; error?: string; phone?: string; success?: string };
+    const query = request.query as { scan?: string; error?: string; phone?: string; success?: string; tab?: string };
     const ctx = getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
       scanSession: query.scan ?? null,
       phoneHint: query.phone ?? null,
+      activeTab: query.tab ?? (query.scan ? 'whatsapp' : 'whatsapp'),
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
       successMessage: query.success === 'key_revoked' ? 'API key berhasil dinonaktifkan' : null,
     });
@@ -88,6 +88,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       title: 'Settings',
       activePage: 'settings',
       currentUser: request.authUser,
+      roleLabel: roleLabel(request.authUser!.role),
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
       successMessage: query.success === '1' ? 'Password berhasil diubah' : null,
     });
@@ -246,20 +247,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.post('/dashboard/api-keys/create', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const body = request.body as {
-      name?: string;
-      webhook_url?: string;
-      webhook_events?: string;
-    };
-
-    const webhookEvents = body.webhook_events
-      ? body.webhook_events.split(',').map((e) => e.trim()).filter(Boolean)
-      : undefined;
+    const body = request.body as { name?: string; webhook_url?: string };
 
     const parsed = createApiKeySchema.safeParse({
       name: body.name ?? 'Laravel App',
       webhook_url: body.webhook_url || null,
-      webhook_events: webhookEvents,
       permissions: [
         'message:send',
         'session:read',
@@ -293,6 +285,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const ctx = getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
+      activeTab: 'apikeys',
       newApiKey: key,
     });
 
@@ -312,7 +305,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       apiKeyRepository.deactivate(id);
     }
 
-    return reply.redirect('/dashboard?success=key_revoked');
+    return reply.redirect('/dashboard?success=key_revoked&tab=apikeys');
   });
 
   app.get('/dashboard/session/:sessionId/qr', async (request, reply) => {
@@ -325,27 +318,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       qr: sessionManager.getQr(sessionId),
       status: sessionManager.getStatus(sessionId),
     });
-  });
-
-  app.get('/ws/dashboard/logs', { websocket: true }, (socket, request) => {
-    if (!verifyWsCookie(request, app)) {
-      socket.close(1008, 'Unauthorized');
-      return;
-    }
-
-    const unsub = waEventBus.onLog((sessionId, message, level) => {
-      socket.send(
-        JSON.stringify({
-          type: 'log',
-          sessionId,
-          message,
-          level,
-          timestamp: new Date().toISOString(),
-        }),
-      );
-    });
-
-    socket.on('close', () => unsub());
   });
 
   app.post('/dashboard/send-test', async (request, reply) => {
