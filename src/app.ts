@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -31,7 +32,7 @@ export async function buildApp() {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'blob:'],
         connectSrc: ["'self'", 'ws:', 'wss:'],
@@ -60,15 +61,32 @@ export async function buildApp() {
   await app.register(formbody);
   await app.register(websocket);
 
+  const publicDir = path.join(process.cwd(), 'public');
+  const cssFile = path.join(publicDir, 'css', 'app.css');
+  const assetVersion = fs.existsSync(cssFile)
+    ? String(Math.floor(fs.statSync(cssFile).mtimeMs))
+    : '0';
+
   await app.register(staticPlugin, {
-    root: path.join(process.cwd(), 'public'),
+    root: publicDir,
     prefix: '/public/',
+  });
+
+  // Alias /css/app.css → same file (backward compat for cached HTML)
+  app.get('/css/app.css', async (_request, reply) => {
+    if (!fs.existsSync(cssFile)) {
+      return reply.code(404).send({ message: 'CSS not found. Run: npm run build:css' });
+    }
+    return reply
+      .header('Cache-Control', 'public, max-age=3600')
+      .type('text/css; charset=utf-8')
+      .send(fs.createReadStream(cssFile));
   });
 
   await app.register(view, {
     engine: { ejs },
     root: path.join(process.cwd(), 'src', 'views'),
-    defaultContext: { baseUrl: config.baseUrl },
+    defaultContext: { baseUrl: config.baseUrl, assetVersion },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

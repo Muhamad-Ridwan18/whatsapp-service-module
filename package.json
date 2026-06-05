@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc && npm run build:css",
+    "postinstall": "npm run build:css",
     "build:css": "tailwindcss -i ./src/views/styles/input.css -o ./public/css/app.css --minify",
     "start": "node dist/server.js",
     "test": "vitest run",

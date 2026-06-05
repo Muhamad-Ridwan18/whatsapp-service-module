@@ -274,7 +274,7 @@
           <% } else { %>
             <div>
               <% recentMessages.forEach(m => { %>
-              <div class="list-item">
+              <div class="activity-row">
                 <div class="min-w-0 text-sm">
                   <p class="text-txt-primary font-medium truncate"><%= m.session_id %></p>
                   <p class="text-xs text-txt-muted truncate">→ <%= m.to_number %></p>
@@ -347,6 +347,6 @@
   </nav>
 
   <%- include('partials/layout-end') %>
-  <script src="/public/js/dashboard.js" defer></script>
+  <script src="/public/js/dashboard.js?v=<%= assetVersion %>" defer></script>
 </body>
 </html>

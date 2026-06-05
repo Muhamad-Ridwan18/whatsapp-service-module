@@ -5,7 +5,6 @@ storage/database.sqlite
 storage/database.sqlite-*
 storage/auth/*
 !storage/auth/.gitkeep
-public/css/app.css
 logs/
 *.log
 .DS_Store
