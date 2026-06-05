@@ -136,12 +136,33 @@ class SessionManager {
       throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
     }
 
-    if (this.sessions.has(sessionId) && this.getStatus(sessionId) !== 'failed') {
-      if (existingBeforeCreate?.user_id && options?.userId &&
-          existingBeforeCreate.user_id !== options.userId) {
-        throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+    const inMemory = this.sessions.has(sessionId);
+    const memStatus = this.getStatus(sessionId);
+
+    if (inMemory && memStatus !== 'failed') {
+      if (!existingBeforeCreate) {
+        const inst = this.sessions.get(sessionId);
+        if (inst?.socket) {
+          try {
+            inst.socket.end(undefined);
+          } catch {
+            /* ignore */
+          }
+        }
+        this.sessions.delete(sessionId);
+      } else {
+        if (options?.userId && !existingBeforeCreate.user_id) {
+          sessionRepository.setOwner(sessionId, options.userId);
+        }
+        if (options?.apiKeyId) {
+          sessionRepository.bindApiKey(sessionId, options.apiKeyId);
+        }
+        if (phoneNumber) {
+          sessionRepository.setPhoneNumber(sessionId, phoneNumber);
+        }
+        await this.restart(sessionId);
+        return;
       }
-      throw new AppError('Session already exists', ERR.SESSION_EXISTS, 409);
     }
 
     if (sessionRepository.count() >= config.whatsapp.maxSessions) {

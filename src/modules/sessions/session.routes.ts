@@ -29,7 +29,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const existing = sessionRepository.findBySessionId(body.sessionId);
-    if (existing && existing.api_key_id && existing.api_key_id !== apiKey.id) {
+    if (existing?.user_id && existing.user_id !== apiKey.user_id) {
+      throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+    }
+    if (existing?.api_key_id && existing.api_key_id !== apiKey.id) {
       throw new AppError('Session milik API key lain', ERR.FORBIDDEN, 403);
     }
 

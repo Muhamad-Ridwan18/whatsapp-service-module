@@ -223,25 +223,18 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         phoneNumber,
       });
     } catch (err) {
-      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
-        return reply.redirect('/dashboard?error=session_forbidden');
-      }
-      if (err instanceof AppError && err.code === ERR.SESSION_EXISTS) {
-        if (err.message.includes('sudah terdaftar')) {
+      if (err instanceof AppError) {
+        if (err.code === ERR.FORBIDDEN) {
+          return reply.redirect('/dashboard?error=session_forbidden');
+        }
+        if (err.code === ERR.SESSION_EXISTS && err.message.includes('sudah terdaftar')) {
           return reply.redirect(`/dashboard?error=phone_exists&phone=${phoneNumber}`);
         }
-        try {
-          assertDashboardSessionAccess(request.authUser!, sessionId);
-          await sessionManager.restart(sessionId);
-        } catch (accessErr) {
-          if (accessErr instanceof AppError && accessErr.code === ERR.FORBIDDEN) {
-            return reply.redirect('/dashboard?error=session_forbidden');
-          }
-          throw accessErr;
+        if (err.code === ERR.SESSION_LIMIT) {
+          return reply.redirect('/dashboard?error=session_limit');
         }
-      } else {
-        return reply.redirect(`/dashboard?error=create_failed&scan=${sessionId}`);
       }
+      return reply.redirect(`/dashboard?error=create_failed&scan=${sessionId}`);
     }
 
     return reply.redirect(`/dashboard?scan=${sessionId}&phone=${phoneNumber}`);

@@ -15,7 +15,7 @@ export function assertApiKeySessionAccess(
 ): SessionRow {
   const session = sessionRepository.findBySessionId(sessionId);
   if (!session) {
-    throw new AppError('Session not found', ERR.SESSION_NOT_FOUND, 404);
+    throw new AppError('Session tidak ditemukan', ERR.SESSION_NOT_FOUND, 404);
   }
   if (!canApiKeyAccessSession(apiKey, session)) {
     throw new AppError(
