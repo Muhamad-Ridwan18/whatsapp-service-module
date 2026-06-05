@@ -83,4 +83,24 @@ export const userRepository = {
   deleteAll(): void {
     db.getDb().prepare('DELETE FROM users').run();
   },
+
+  deactivate(id: number): void {
+    db.getDb()
+      .prepare(`UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?`)
+      .run(id);
+  },
+
+  createClient(data: {
+    email: string;
+    password_hash: string;
+    name: string;
+    role?: UserRole;
+  }): number {
+    return this.create({
+      email: data.email,
+      password_hash: data.password_hash,
+      name: data.name,
+      role: data.role ?? 'client',
+    });
+  },
 };

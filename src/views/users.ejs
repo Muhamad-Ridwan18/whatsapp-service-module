@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <%- include('partials/head', { title: 'Users' }) %>
+</head>
+<body class="bg-surface min-h-screen font-sans text-gray-200">
+  <%- include('partials/nav', { currentUser, activePage: 'users' }) %>
+
+  <main class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <% if (errorMessage) { %>
+      <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"><%= errorMessage %></div>
+    <% } %>
+    <% if (successMessage) { %>
+      <div class="p-3 rounded-lg bg-accent/10 border border-accent/40 text-accent text-sm"><%= successMessage %></div>
+    <% } %>
+
+    <div class="card">
+      <h2 class="text-sm font-semibold text-white mb-3">Tambah User / Client</h2>
+      <form method="POST" action="/dashboard/users/create" class="grid sm:grid-cols-2 gap-3">
+        <input type="text" name="name" placeholder="Nama" class="input-field" required>
+        <input type="email" name="email" placeholder="email@client.com" class="input-field" required>
+        <input type="password" name="password" placeholder="Password (min 6)" minlength="6" class="input-field" required>
+        <select name="role" class="input-field">
+          <option value="client">client</option>
+          <option value="admin">admin</option>
+        </select>
+        <div class="sm:col-span-2">
+          <button type="submit" class="btn-primary">Buat User</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card overflow-x-auto">
+      <h2 class="text-sm font-semibold text-white mb-3">Daftar Users</h2>
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-left text-gray-500 border-b border-surface-200">
+            <th class="pb-2 pr-3">Nama</th>
+            <th class="pb-2 pr-3">Email</th>
+            <th class="pb-2 pr-3">Role</th>
+            <th class="pb-2 pr-3">Status</th>
+            <th class="pb-2">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(u => { %>
+            <tr class="border-b border-surface-200/40">
+              <td class="py-2 pr-3"><%= u.name %></td>
+              <td class="py-2 pr-3 text-gray-400"><%= u.email %></td>
+              <td class="py-2 pr-3"><%= u.role %></td>
+              <td class="py-2 pr-3 <%= u.is_active ? 'text-accent' : 'text-red-400' %>"><%= u.is_active ? 'aktif' : 'nonaktif' %></td>
+              <td class="py-2">
+                <% if (u.is_active && u.id !== currentUser.id && u.role !== 'super_admin') { %>
+                  <form method="POST" action="/dashboard/users/<%= u.id %>/deactivate" class="inline" data-confirm="Nonaktifkan user ini?">
+                    <button type="submit" class="text-red-400 hover:text-red-300">Nonaktifkan</button>
+                  </form>
+                <% } else { %>
+                  <span class="text-gray-600">—</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/public/js/dashboard.js" defer></script>
+</body>
+</html>

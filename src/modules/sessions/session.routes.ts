@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { verifyWsCookie } from '../dashboard/dashboard.helper.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { waEventBus } from '../../services/whatsapp/event-bus.js';
 import { sessionRepository } from '../../services/database/repositories/session.repository.js';
@@ -103,6 +104,11 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/ws/session/:sessionId/qr', { websocket: true }, (socket, request) => {
+    if (!verifyWsCookie(request, request.server)) {
+      socket.close(1008, 'Unauthorized');
+      return;
+    }
+
     const { sessionId } = sessionIdParamSchema.parse(request.params);
 
     const sendQr = () => {

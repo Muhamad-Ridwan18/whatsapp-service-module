@@ -16,6 +16,13 @@ export const sessionRepository = {
       .all() as SessionRow[];
   },
 
+  listByUserId(userId: number): SessionRow[] {
+    return db
+      .getDb()
+      .prepare('SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC')
+      .all(userId) as SessionRow[];
+  },
+
   count(): number {
     const row = db.getDb().prepare('SELECT COUNT(*) as c FROM sessions').get() as {
       c: number;

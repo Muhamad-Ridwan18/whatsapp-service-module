@@ -23,6 +23,20 @@ export const apiKeyRepository = {
       .all(userId) as ApiKeyRow[];
   },
 
+  listAll(): ApiKeyRow[] {
+    return db
+      .getDb()
+      .prepare('SELECT * FROM api_keys ORDER BY id DESC')
+      .all() as ApiKeyRow[];
+  },
+
+  findByIdAndUserId(id: number, userId: number): ApiKeyRow | undefined {
+    return db
+      .getDb()
+      .prepare('SELECT * FROM api_keys WHERE id = ? AND user_id = ?')
+      .get(id, userId) as ApiKeyRow | undefined;
+  },
+
   create(data: {
     user_id: number;
     key_hash: string;
@@ -63,5 +77,40 @@ export const apiKeyRepository = {
     db.getDb()
       .prepare(`UPDATE api_keys SET is_active = 0, updated_at = datetime('now') WHERE id = ?`)
       .run(id);
+  },
+
+  update(
+    id: number,
+    data: {
+      webhook_url?: string | null;
+      webhook_events?: string;
+      ip_whitelist?: string | null;
+      name?: string;
+    },
+  ): void {
+    const sets: string[] = ["updated_at = datetime('now')"];
+    const params: (string | null | number)[] = [];
+
+    if (data.name !== undefined) {
+      sets.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.webhook_url !== undefined) {
+      sets.push('webhook_url = ?');
+      params.push(data.webhook_url);
+    }
+    if (data.webhook_events !== undefined) {
+      sets.push('webhook_events = ?');
+      params.push(data.webhook_events);
+    }
+    if (data.ip_whitelist !== undefined) {
+      sets.push('ip_whitelist = ?');
+      params.push(data.ip_whitelist);
+    }
+
+    params.push(id);
+    db.getDb()
+      .prepare(`UPDATE api_keys SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...params);
   },
 };

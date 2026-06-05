@@ -90,4 +90,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       created_at: k.created_at,
     })));
   });
+
+  app.delete('/api/auth/api-keys/:id', {
+    preHandler: [jwtAuth, requireRole('super_admin', 'admin')],
+    schema: { tags: ['Auth'] },
+  }, async (request, reply) => {
+    const id = parseInt((request.params as { id: string }).id, 10);
+    const key = apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
+
+    if (!key) {
+      throw new AppError('API key not found', ERR.NOT_FOUND, 404);
+    }
+
+    apiKeyRepository.deactivate(id);
+    return sendSuccess(reply, { revoked: true });
+  });
 }

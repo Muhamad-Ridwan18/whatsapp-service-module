@@ -1,39 +1,31 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { config } from '../../config/index.js';
-import { messageRepository } from '../../services/database/repositories/message.repository.js';
-import { sessionRepository } from '../../services/database/repositories/session.repository.js';
-import { auditRepository } from '../../services/database/repositories/audit.repository.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { waEventBus } from '../../services/whatsapp/event-bus.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
-import { verifyPassword, generateApiKey } from '../../utils/crypto.js';
+import { verifyPassword, generateApiKey, hashPassword } from '../../utils/crypto.js';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
 import { createApiKeySchema } from '../auth/auth.schema.js';
 import { createSessionSchema, sessionIdParamSchema } from '../sessions/session.schema.js';
 import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
-import type { JwtPayload } from '../../types/index.js';
+import {
+  verifyDashboardCookie,
+  verifyWsCookie,
+  requireDashboardRole,
+  getDashboardContext,
+} from './dashboard.helper.js';
 
-async function verifyDashboardCookie(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  app: FastifyInstance,
-): Promise<boolean> {
-  const token = request.cookies.token;
-  if (!token) {
-    reply.redirect('/login');
-    return false;
-  }
-  try {
-    request.authUser = await app.jwt.verify<JwtPayload>(token);
-    return true;
-  } catch {
-    reply.clearCookie('token', { path: '/' });
-    reply.redirect('/login');
-    return false;
-  }
-}
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid_input: 'Input tidak valid',
+  invalid_session_id: 'Session ID tidak valid',
+  create_failed: 'Gagal membuat session',
+  phone_exists: 'Nomor HP sudah terdaftar pada session lain',
+  password_mismatch: 'Konfirmasi password tidak cocok',
+  wrong_password: 'Password saat ini salah',
+  user_exists: 'Email sudah terdaftar',
+};
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   if (!config.dashboard.enabled) return;
@@ -75,46 +67,125 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const sessions = sessionRepository.list();
-    const connected = sessionManager.getConnectedCount();
-    const query = request.query as { scan?: string; error?: string; phone?: string };
-    const scanSession = query.scan ?? null;
-    const errorMessages: Record<string, string> = {
-      invalid_input: 'Nomor HP tidak valid. Gunakan format 628123456789',
-      invalid_session_id: 'Session ID tidak valid',
-      create_failed: 'Gagal membuat session. Coba lagi.',
-      phone_exists: 'Nomor HP sudah terdaftar pada session lain',
+    const query = request.query as { scan?: string; error?: string; phone?: string; success?: string };
+    const ctx = getDashboardContext(request.authUser!, {
+      title: 'Dashboard',
+      activePage: 'dashboard',
+      scanSession: query.scan ?? null,
+      phoneHint: query.phone ?? null,
+      errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
+      successMessage: query.success === 'key_revoked' ? 'API key berhasil dinonaktifkan' : null,
+    });
+
+    return reply.view('dashboard.ejs', ctx);
+  });
+
+  app.get('/dashboard/settings', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    const query = request.query as { error?: string; success?: string };
+
+    return reply.view('settings.ejs', {
+      title: 'Settings',
+      activePage: 'settings',
+      currentUser: request.authUser,
+      errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
+      successMessage: query.success === '1' ? 'Password berhasil diubah' : null,
+    });
+  });
+
+  app.post('/dashboard/settings/password', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+
+    const body = request.body as {
+      currentPassword?: string;
+      newPassword?: string;
+      confirmPassword?: string;
     };
 
-    const apiKeys = request.authUser
-      ? apiKeyRepository.findByUserId(request.authUser.sub)
-      : [];
+    if (!body.newPassword || body.newPassword.length < 6) {
+      return reply.redirect('/dashboard/settings?error=invalid_input');
+    }
+    if (body.newPassword !== body.confirmPassword) {
+      return reply.redirect('/dashboard/settings?error=password_mismatch');
+    }
 
-    return reply.view('dashboard.ejs', {
-      title: 'Dashboard',
-      scanSession,
-      newApiKey: null,
-      errorMessage: query.error ? errorMessages[query.error] ?? 'Terjadi kesalahan' : null,
-      phoneHint: query.phone ?? null,
-      apiKeys: apiKeys.map((k) => ({
-        id: k.id,
-        name: k.name,
-        prefix: k.key_prefix,
-        permissions: JSON.parse(k.permissions) as string[],
-        is_active: k.is_active,
-        last_used_at: k.last_used_at,
-        created_at: k.created_at,
-      })),
-      stats: {
-        totalSessions: sessions.length,
-        connected,
-        messagesToday: messageRepository.countToday(),
-        queue: messageQueue.getStats(),
-      },
-      sessions,
-      recentMessages: messageRepository.recent(20),
-      auditLogs: auditRepository.recent(30),
+    const user = userRepository.findById(request.authUser!.sub);
+    if (!user || !(await verifyPassword(body.currentPassword ?? '', user.password_hash))) {
+      return reply.redirect('/dashboard/settings?error=wrong_password');
+    }
+
+    const hash = await hashPassword(body.newPassword);
+    userRepository.updatePassword(user.email, hash);
+    return reply.redirect('/dashboard/settings?success=1');
+  });
+
+  app.get('/dashboard/users', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    try {
+      requireDashboardRole(request, 'super_admin');
+    } catch {
+      return reply.redirect('/dashboard');
+    }
+
+    const query = request.query as { error?: string; success?: string };
+    const ctx = getDashboardContext(request.authUser!, {
+      title: 'Users',
+      activePage: 'users',
+      errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
+      successMessage: query.success === '1' ? 'User berhasil dibuat' : null,
     });
+
+    return reply.view('users.ejs', ctx);
+  });
+
+  app.post('/dashboard/users/create', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    try {
+      requireDashboardRole(request, 'super_admin');
+    } catch {
+      return reply.redirect('/dashboard');
+    }
+
+    const body = request.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: string;
+    };
+
+    if (!body.email || !body.password || body.password.length < 6 || !body.name) {
+      return reply.redirect('/dashboard/users?error=invalid_input');
+    }
+    if (userRepository.findByEmail(body.email)) {
+      return reply.redirect('/dashboard/users?error=user_exists');
+    }
+
+    const passwordHash = await hashPassword(body.password);
+    userRepository.createClient({
+      email: body.email,
+      password_hash: passwordHash,
+      name: body.name,
+      role: body.role === 'admin' ? 'admin' : 'client',
+    });
+
+    return reply.redirect('/dashboard/users?success=1');
+  });
+
+  app.post('/dashboard/users/:id/deactivate', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    try {
+      requireDashboardRole(request, 'super_admin');
+    } catch {
+      return reply.redirect('/dashboard');
+    }
+
+    const id = parseInt((request.params as { id: string }).id, 10);
+    const target = userRepository.findById(id);
+    if (target && target.id !== request.authUser!.sub && target.role !== 'super_admin') {
+      userRepository.deactivate(id);
+    }
+
+    return reply.redirect('/dashboard/users');
   });
 
   app.post('/dashboard/session/create', async (request, reply) => {
@@ -151,12 +222,44 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect(`/dashboard?scan=${sessionId}&phone=${phoneNumber}`);
   });
 
+  app.post('/dashboard/session/:sessionId/reconnect', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    const { sessionId } = sessionIdParamSchema.parse(request.params);
+    await sessionManager.restart(sessionId);
+    return reply.redirect(`/dashboard?scan=${sessionId}`);
+  });
+
+  app.post('/dashboard/session/:sessionId/disconnect', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    const { sessionId } = sessionIdParamSchema.parse(request.params);
+    await sessionManager.disconnect(sessionId);
+    return reply.redirect('/dashboard');
+  });
+
+  app.post('/dashboard/session/:sessionId/delete', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+    const { sessionId } = sessionIdParamSchema.parse(request.params);
+    await sessionManager.deleteSession(sessionId);
+    return reply.redirect('/dashboard');
+  });
+
   app.post('/dashboard/api-keys/create', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const body = request.body as { name?: string };
+    const body = request.body as {
+      name?: string;
+      webhook_url?: string;
+      webhook_events?: string;
+    };
+
+    const webhookEvents = body.webhook_events
+      ? body.webhook_events.split(',').map((e) => e.trim()).filter(Boolean)
+      : undefined;
+
     const parsed = createApiKeySchema.safeParse({
       name: body.name ?? 'Laravel App',
+      webhook_url: body.webhook_url || null,
+      webhook_events: webhookEvents,
       permissions: [
         'message:send',
         'session:read',
@@ -185,37 +288,31 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       webhook_events: parsed.data.webhook_events
         ? JSON.stringify(parsed.data.webhook_events)
         : undefined,
-      ip_whitelist: parsed.data.ip_whitelist,
     });
 
-    const sessions = sessionRepository.list();
-    const apiKeys = apiKeyRepository.findByUserId(request.authUser!.sub);
-
-    return reply.view('dashboard.ejs', {
+    const ctx = getDashboardContext(request.authUser!, {
       title: 'Dashboard',
-      scanSession: null,
+      activePage: 'dashboard',
       newApiKey: key,
-      errorMessage: null,
-      phoneHint: null,
-      apiKeys: apiKeys.map((k) => ({
-        id: k.id,
-        name: k.name,
-        prefix: k.key_prefix,
-        permissions: JSON.parse(k.permissions) as string[],
-        is_active: k.is_active,
-        last_used_at: k.last_used_at,
-        created_at: k.created_at,
-      })),
-      stats: {
-        totalSessions: sessions.length,
-        connected: sessionManager.getConnectedCount(),
-        messagesToday: messageRepository.countToday(),
-        queue: messageQueue.getStats(),
-      },
-      sessions,
-      recentMessages: messageRepository.recent(20),
-      auditLogs: auditRepository.recent(30),
     });
+
+    return reply.view('dashboard.ejs', ctx);
+  });
+
+  app.post('/dashboard/api-keys/:id/revoke', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+
+    const id = parseInt((request.params as { id: string }).id, 10);
+    const key =
+      request.authUser!.role === 'super_admin'
+        ? apiKeyRepository.findById(id)
+        : apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
+
+    if (key?.is_active) {
+      apiKeyRepository.deactivate(id);
+    }
+
+    return reply.redirect('/dashboard?success=key_revoked');
   });
 
   app.get('/dashboard/session/:sessionId/qr', async (request, reply) => {
@@ -224,13 +321,18 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
     await sessionManager.ensureConnection(sessionId);
 
-    const qr = sessionManager.getQr(sessionId);
-    const status = sessionManager.getStatus(sessionId);
-
-    return sendSuccess(reply, { qr, status });
+    return sendSuccess(reply, {
+      qr: sessionManager.getQr(sessionId),
+      status: sessionManager.getStatus(sessionId),
+    });
   });
 
-  app.get('/ws/dashboard/logs', { websocket: true }, (socket) => {
+  app.get('/ws/dashboard/logs', { websocket: true }, (socket, request) => {
+    if (!verifyWsCookie(request, app)) {
+      socket.close(1008, 'Unauthorized');
+      return;
+    }
+
     const unsub = waEventBus.onLog((sessionId, message, level) => {
       socket.send(
         JSON.stringify({
@@ -247,8 +349,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/dashboard/send-test', async (request, reply) => {
-    const token = request.cookies.token;
-    if (!token) return reply.redirect('/login');
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const body = request.body as {
       sessionId?: string;
@@ -257,8 +358,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     };
 
     if (body.sessionId && body.to && body.message) {
-      const { messageQueue: mq } = await import('../../services/queue/message-queue.js');
-      mq.enqueue(body.sessionId, body.to, {
+      messageQueue.enqueue(body.sessionId, body.to, {
         type: 'text',
         message: body.message,
       });

@@ -133,6 +133,15 @@
     });
   }
 
+  document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      const msg = form.getAttribute('data-confirm');
+      if (msg && !window.confirm(msg)) {
+        e.preventDefault();
+      }
+    });
+  });
+
   const btnCopyKey = document.getElementById('btnCopyKey');
   const newApiKeyValue = document.getElementById('newApiKeyValue');
   if (btnCopyKey && newApiKeyValue) {

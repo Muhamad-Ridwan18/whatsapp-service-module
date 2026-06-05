@@ -1,0 +1,20 @@
+<nav class="border-b border-surface-200 bg-surface-50/80 backdrop-blur sticky top-0 z-50">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="w-8 h-8 rounded-lg bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">WS</span>
+      <span class="font-semibold text-white text-sm">WhatsApp Service</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+        <span class="text-gray-500 text-xs hidden sm:inline"><%= currentUser.email %> · <span class="text-accent"><%= currentUser.role %></span></span>
+      <% } %>
+      <a href="/dashboard" class="<%= activePage === 'dashboard' ? 'text-white' : 'text-gray-400 hover:text-white' %>">Dashboard</a>
+      <% if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'super_admin') { %>
+        <a href="/dashboard/users" class="<%= activePage === 'users' ? 'text-white' : 'text-gray-400 hover:text-white' %>">Users</a>
+      <% } %>
+      <a href="/dashboard/settings" class="<%= activePage === 'settings' ? 'text-white' : 'text-gray-400 hover:text-white' %>">Settings</a>
+      <a href="/docs" class="text-gray-400 hover:text-white">API</a>
+      <a href="/logout" class="btn-secondary text-xs py-1.5 px-3">Logout</a>
+    </div>
+  </div>
+</nav>
