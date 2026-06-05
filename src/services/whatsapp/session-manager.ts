@@ -1,4 +1,5 @@
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
@@ -84,8 +85,16 @@ class SessionManager {
       return;
     }
 
-    if (!inst?.socket || status === 'disconnected' || status === 'failed') {
-      if (inst) inst.reconnectAttempts = 0;
+    if (status === 'failed' || status === 'disconnected') {
+      if (inst) {
+        inst.reconnectAttempts = 0;
+        inst.isConnecting = false;
+      }
+      await this.connect(sessionId);
+      return;
+    }
+
+    if (!inst?.socket) {
       await this.connect(sessionId);
     }
   }
@@ -192,6 +201,7 @@ class SessionManager {
       const socket = makeWASocket({
         version,
         auth: state,
+        browser: Browsers.ubuntu('Chrome'),
         printQRInTerminal: false,
         syncFullHistory: false,
         markOnlineOnConnect: false,
@@ -207,6 +217,7 @@ class SessionManager {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
+          inst!.reconnectAttempts = 0;
           const qrBase64 = await QRCode.toDataURL(qr, { width: 256, margin: 1 });
           inst!.qrBase64 = qrBase64.replace(/^data:image\/png;base64,/, '');
           this.setStatus(sessionId, 'qr_ready');
@@ -233,27 +244,55 @@ class SessionManager {
           const statusCode = (
             lastDisconnect?.error as { output?: { statusCode?: number } } | undefined
           )?.output?.statusCode;
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-          this.setStatus(sessionId, shouldReconnect ? 'reconnecting' : 'disconnected');
+          inst!.socket = null;
+          inst!.isConnecting = false;
+
           void webhookService.dispatch('session.disconnected', sessionId, {
             reason: statusCode,
           });
 
-          if (shouldReconnect && inst!.reconnectAttempts < config.whatsapp.maxReconnectAttempts) {
-            inst!.reconnectAttempts++;
+          if (statusCode === DisconnectReason.loggedOut) {
+            this.setStatus(sessionId, 'disconnected');
+            waLogger.warn({ sessionId, statusCode }, 'Session logged out');
+            return;
+          }
+
+          const restartRequired = statusCode === DisconnectReason.restartRequired;
+          const inQrPhase =
+            inst!.status === 'initializing' ||
+            inst!.status === 'qr_ready' ||
+            inst!.status === 'reconnecting';
+
+          if (restartRequired || (inQrPhase && inst!.reconnectAttempts < 30)) {
+            if (!restartRequired) inst!.reconnectAttempts++;
+            this.setStatus(sessionId, inQrPhase ? 'qr_ready' : 'reconnecting');
             waLogger.warn(
-              { sessionId, attempt: inst!.reconnectAttempts },
-              'Reconnecting',
+              { sessionId, statusCode, attempt: inst!.reconnectAttempts, restartRequired },
+              'Reconnecting session',
+            );
+            const delay = restartRequired ? 0 : config.whatsapp.reconnectIntervalMs;
+            setTimeout(() => {
+              void this.connect(sessionId);
+            }, delay);
+            return;
+          }
+
+          if (inst!.reconnectAttempts < config.whatsapp.maxReconnectAttempts) {
+            inst!.reconnectAttempts++;
+            this.setStatus(sessionId, 'reconnecting');
+            waLogger.warn(
+              { sessionId, statusCode, attempt: inst!.reconnectAttempts },
+              'Reconnecting session',
             );
             setTimeout(() => {
-              inst!.isConnecting = false;
               void this.connect(sessionId);
             }, config.whatsapp.reconnectIntervalMs);
-          } else {
-            this.setStatus(sessionId, 'failed');
-            inst!.socket = null;
+            return;
           }
+
+          waLogger.error({ sessionId, statusCode }, 'Session connection failed');
+          this.setStatus(sessionId, 'failed');
         }
       });
 
@@ -443,9 +482,20 @@ class SessionManager {
   }
 
   async restart(sessionId: string): Promise<void> {
-    await this.disconnect(sessionId);
     const inst = this.sessions.get(sessionId);
-    if (inst) inst.reconnectAttempts = 0;
+    if (inst?.socket) {
+      try {
+        inst.socket.end(undefined);
+      } catch {
+        /* ignore */
+      }
+      inst.socket = null;
+    }
+    if (inst) {
+      inst.reconnectAttempts = 0;
+      inst.isConnecting = false;
+      inst.qrBase64 = null;
+    }
     await this.connect(sessionId);
   }
 

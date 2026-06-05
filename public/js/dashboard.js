@@ -93,12 +93,28 @@
       return;
     }
 
+    if (s === 'reconnecting') {
+      statusEl.textContent = 'Menghubungkan ulang...';
+      if (!lastQrData) {
+        box.className = 'qr-frame';
+        box.innerHTML =
+          '<p class="text-sm text-txt-muted animate-pulse-soft">Menghubungkan ulang...</p>';
+      }
+      return;
+    }
+
     if (s === 'failed') {
       lastQrData = null;
       box.className = 'qr-frame';
       box.innerHTML =
-        '<p class="text-sm text-red-400">Gagal. Klik "Sambung ulang" di daftar session.</p>';
-      stopQrWatch();
+        '<p class="text-sm text-red-400 mb-3">Koneksi gagal.</p>' +
+        '<button type="button" id="btnRetryQr" class="btn-brand">Coba sambung ulang</button>';
+      var retryBtn = document.getElementById('btnRetryQr');
+      if (retryBtn && activeSessionId) {
+        retryBtn.onclick = function () {
+          loadQr(activeSessionId);
+        };
+      }
       return;
     }
 
