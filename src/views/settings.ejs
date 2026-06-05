@@ -3,50 +3,61 @@
 <head>
   <%- include('partials/head', { title: 'Profil' }) %>
 </head>
-<body class="bg-surface min-h-screen font-sans text-gray-200">
-  <%- include('partials/nav', { currentUser, activePage: 'settings' }) %>
+<body>
+  <%- include('partials/sidebar', { currentUser, activePage: 'settings', pageTitle: 'Profil' }) %>
 
-  <main class="max-w-lg mx-auto px-4 py-6">
-    <header class="mb-6">
-      <h1 class="text-xl font-bold text-white">Profil &amp; Keamanan</h1>
-      <p class="text-sm text-gray-500 mt-1">Kelola akun dan password Anda.</p>
+  <div class="page-inner">
+    <header class="page-header">
+      <p class="page-eyebrow">Akun</p>
+      <h1 class="page-title">Profil &amp; keamanan</h1>
+      <p class="page-subtitle">Kelola informasi akun dan ubah password Anda.</p>
     </header>
 
     <%- include('partials/alerts') %>
 
-    <div class="card mb-4">
-      <h2 class="section-title mb-4">Info Akun</h2>
-      <dl class="space-y-3 text-sm">
-        <div class="flex justify-between py-2 border-b border-surface-200/50">
-          <dt class="text-gray-500">Email</dt>
-          <dd class="text-white"><%= currentUser.email %></dd>
+    <div class="grid gap-4 sm:gap-6 max-w-xl">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Informasi akun</h2>
         </div>
-        <div class="flex justify-between py-2">
-          <dt class="text-gray-500">Peran</dt>
-          <dd><span class="badge-success"><%= roleLabel %></span></dd>
+        <div class="card-body space-y-0">
+          <div class="flex justify-between items-center gap-4 py-3 border-b border-border">
+            <span class="text-sm text-txt-muted">Email</span>
+            <span class="text-sm font-medium text-right break-all"><%= currentUser.email %></span>
+          </div>
+          <div class="flex justify-between items-center gap-4 py-3">
+            <span class="text-sm text-txt-muted">Peran</span>
+            <span class="badge-success"><%= roleLabel %></span>
+          </div>
         </div>
-      </dl>
-    </div>
+      </div>
 
-    <div class="card">
-      <h2 class="section-title mb-1">Ubah Password</h2>
-      <p class="section-desc mb-4">Gunakan password kuat minimal 6 karakter.</p>
-      <form method="POST" action="/dashboard/settings/password" class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password saat ini</label>
-          <input type="password" name="currentPassword" class="input-field" required autocomplete="current-password">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Ubah password</h2>
+          <p class="card-desc">Minimal 6 karakter, gunakan kombinasi huruf dan angka.</p>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password baru</label>
-          <input type="password" name="newPassword" minlength="6" class="input-field" required autocomplete="new-password">
+        <div class="card-body">
+          <form method="POST" action="/dashboard/settings/password" class="space-y-4">
+            <div>
+              <label class="label">Password saat ini</label>
+              <input type="password" name="currentPassword" class="input" required autocomplete="current-password">
+            </div>
+            <div>
+              <label class="label">Password baru</label>
+              <input type="password" name="newPassword" minlength="6" class="input" required autocomplete="new-password">
+            </div>
+            <div>
+              <label class="label">Ulangi password baru</label>
+              <input type="password" name="confirmPassword" minlength="6" class="input" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn-brand">Simpan password</button>
+          </form>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Ulangi password baru</label>
-          <input type="password" name="confirmPassword" minlength="6" class="input-field" required autocomplete="new-password">
-        </div>
-        <button type="submit" class="btn-primary w-full">Simpan Password</button>
-      </form>
+      </div>
     </div>
-  </main>
+  </div>
+
+  <%- include('partials/layout-end') %>
 </body>
 </html>

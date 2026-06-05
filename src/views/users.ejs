@@ -3,88 +3,112 @@
 <head>
   <%- include('partials/head', { title: 'Pengguna' }) %>
 </head>
-<body class="bg-surface min-h-screen font-sans text-gray-200">
-  <%- include('partials/nav', { currentUser, activePage: 'users' }) %>
+<body>
+  <%- include('partials/sidebar', { currentUser, activePage: 'users', pageTitle: 'Pengguna' }) %>
 
-  <main class="max-w-4xl mx-auto px-4 py-6">
-    <header class="mb-6">
-      <h1 class="text-xl font-bold text-white">Kelola Pengguna</h1>
-      <p class="text-sm text-gray-500 mt-1">Buat akun klien atau admin untuk akses terbatas ke panel ini.</p>
+  <div class="page-inner">
+    <header class="page-header">
+      <p class="page-eyebrow">Manajemen</p>
+      <h1 class="page-title">Pengguna</h1>
+      <p class="page-subtitle">Kelola akun klien dan admin yang mengakses panel ini.</p>
     </header>
 
     <%- include('partials/alerts') %>
 
-    <div class="card mb-6">
-      <h2 class="section-title mb-1">Tambah Pengguna Baru</h2>
-      <p class="section-desc mb-4">
-        <strong>Klien</strong> — hanya lihat session miliknya &nbsp;·&nbsp;
-        <strong>Admin</strong> — kelola session &amp; API key
-      </p>
-      <form method="POST" action="/dashboard/users/create" class="grid sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Nama</label>
-          <input type="text" name="name" placeholder="Nama lengkap" class="input-field" required>
+    <div class="space-y-4 sm:space-y-6">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Tambah pengguna</h2>
+          <p class="card-desc">
+            <span class="badge-muted">Klien</span> akses terbatas ·
+            <span class="badge-success">Admin</span> akses penuh
+          </p>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-          <input type="email" name="email" placeholder="klien@perusahaan.com" class="input-field" required>
+        <div class="card-body">
+          <form method="POST" action="/dashboard/users/create" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Nama</label>
+              <input type="text" name="name" placeholder="Nama lengkap" class="input" required>
+            </div>
+            <div>
+              <label class="label">Email</label>
+              <input type="email" name="email" placeholder="email@perusahaan.com" class="input" required>
+            </div>
+            <div>
+              <label class="label">Password</label>
+              <input type="password" name="password" minlength="6" placeholder="Min. 6 karakter" class="input" required>
+            </div>
+            <div>
+              <label class="label">Peran</label>
+              <select name="role" class="select">
+                <option value="client">Klien</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <button type="submit" class="btn-brand">Buat pengguna</button>
+            </div>
+          </form>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
-          <input type="password" name="password" placeholder="Min. 6 karakter" minlength="6" class="input-field" required>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1.5">Peran</label>
-          <select name="role" class="input-field">
-            <option value="client">Klien</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <div class="sm:col-span-2">
-          <button type="submit" class="btn-primary">Buat Pengguna</button>
-        </div>
-      </form>
-    </div>
+      </div>
 
-    <div class="card">
-      <h2 class="section-title mb-4">Daftar Pengguna</h2>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nama</th>
-              <th>Email</th>
-              <th>Peran</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Daftar pengguna</h2>
+          <p class="card-desc"><%= users.length %> akun terdaftar</p>
+        </div>
+        <div class="card-body">
+          <div class="md:hidden space-y-3">
             <% users.forEach(u => { %>
-              <tr>
-                <td class="text-gray-200"><%= u.name %></td>
-                <td class="text-gray-400"><%= u.email %></td>
-                <td><span class="badge-muted"><%= u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Klien' %></span></td>
-                <td>
-                  <% if (u.is_active) { %><span class="badge-success">Aktif</span>
-                  <% } else { %><span class="badge-error">Nonaktif</span><% } %>
-                </td>
-                <td>
-                  <% if (u.is_active && u.id !== currentUser.id && u.role !== 'super_admin') { %>
-                    <form method="POST" action="/dashboard/users/<%= u.id %>/deactivate" data-confirm="Nonaktifkan pengguna <%= u.email %>?">
+            <div class="session-card">
+              <div class="session-card-top">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-txt-primary"><%= u.name %></p>
+                  <p class="text-xs text-txt-muted truncate"><%= u.email %></p>
+                </div>
+                <% if (u.is_active) { %><span class="badge-success">Aktif</span><% } else { %><span class="badge-error">Nonaktif</span><% } %>
+              </div>
+              <p class="text-xs text-txt-muted">
+                <%= u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Klien' %>
+              </p>
+              <% if (u.is_active && u.id !== currentUser.id && u.role !== 'super_admin') { %>
+              <form method="POST" action="/dashboard/users/<%= u.id %>/deactivate" data-confirm="Nonaktifkan <%= u.email %>?">
+                <button type="submit" class="btn-danger">Nonaktifkan</button>
+              </form>
+              <% } %>
+            </div>
+            <% }) %>
+          </div>
+          <div class="table-desktop">
+            <table class="table">
+              <thead>
+                <tr><th>Nama</th><th>Email</th><th>Peran</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                <% users.forEach(u => { %>
+                <tr>
+                  <td class="text-txt-primary font-medium"><%= u.name %></td>
+                  <td><%= u.email %></td>
+                  <td><span class="badge-muted"><%= u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Klien' %></span></td>
+                  <td><% if (u.is_active) { %><span class="badge-success">Aktif</span><% } else { %><span class="badge-error">Nonaktif</span><% } %></td>
+                  <td>
+                    <% if (u.is_active && u.id !== currentUser.id && u.role !== 'super_admin') { %>
+                    <form method="POST" action="/dashboard/users/<%= u.id %>/deactivate" data-confirm="Nonaktifkan <%= u.email %>?">
                       <button type="submit" class="btn-danger">Nonaktifkan</button>
                     </form>
-                  <% } else { %>
-                    <span class="text-gray-600 text-xs">—</span>
-                  <% } %>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+                    <% } %>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
-  </main>
+  </div>
+
+  <%- include('partials/layout-end') %>
   <script src="/public/js/dashboard.js" defer></script>
 </body>
 </html>

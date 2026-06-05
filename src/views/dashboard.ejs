@@ -3,293 +3,350 @@
 <head>
   <%- include('partials/head', { title: 'Beranda' }) %>
 </head>
-<body
-  class="bg-surface min-h-screen font-sans text-gray-200"
-  data-scan-session="<%= scanSession || '' %>"
-  data-active-tab="<%= activeTab || 'whatsapp' %>"
->
-  <%- include('partials/nav', { currentUser, activePage: 'dashboard' }) %>
+<body data-scan-session="<%= scanSession || '' %>" data-active-tab="<%= activeTab || 'whatsapp' %>">
+  <%- include('partials/sidebar', { currentUser, activePage: 'dashboard', pageTitle: 'Beranda' }) %>
 
-  <main class="max-w-5xl mx-auto px-4 py-6">
-    <header class="mb-6">
-      <h1 class="text-xl font-bold text-white">Halo, <%= currentUser.email.split('@')[0] %></h1>
-      <p class="text-sm text-gray-500 mt-1">Kelola koneksi WhatsApp dan API untuk integrasi website Anda.</p>
+  <div class="page-inner">
+    <header class="page-header">
+      <p class="page-eyebrow">Panel Admin</p>
+      <h1 class="page-title">Kelola WhatsApp &amp; API</h1>
+      <p class="page-subtitle">Hubungkan nomor, kelola session, dan integrasikan ke website Laravel Anda.</p>
     </header>
 
     <%- include('partials/alerts') %>
 
     <% if (newApiKey) { %>
-      <div class="card mb-6 border-accent/30 bg-accent/5">
-        <p class="section-title text-accent">API Key baru — simpan sekarang!</p>
-        <p class="section-desc mb-4">Key hanya ditampilkan sekali. Masukkan ke file <code class="text-accent">.env</code> Laravel:</p>
-        <code class="block text-xs text-gray-500 mb-2">WHATSAPP_API_KEY=...</code>
-        <div class="flex flex-col sm:flex-row gap-2">
-          <code id="newApiKeyValue" class="flex-1 bg-surface px-3 py-2.5 rounded-lg text-sm text-white font-mono break-all border border-surface-200"><%= newApiKey %></code>
-          <button type="button" id="btnCopyKey" class="btn-primary shrink-0">Salin Key</button>
-        </div>
+    <div class="card-highlight">
+      <div class="card-header">
+        <p class="card-title text-brand-light">API Key berhasil dibuat</p>
+        <p class="card-desc">Simpan key ini sekarang — tidak akan ditampilkan lagi.</p>
       </div>
+      <div class="card-body space-y-3">
+        <p class="hint font-mono">WHATSAPP_API_KEY=</p>
+        <code id="newApiKeyValue" class="block w-full bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all"><%= newApiKey %></code>
+        <button type="button" id="btnCopyKey" class="btn-brand">Salin Key</button>
+      </div>
+    </div>
     <% } %>
 
-    <!-- Ringkasan -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-      <div class="stat-card">
-        <span class="text-xs text-gray-500">Total Session</span>
-        <span class="text-2xl font-bold text-white"><%= stats.totalSessions %></span>
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-item">
+        <p class="stat-item-label">Total session</p>
+        <p class="stat-item-value"><%= stats.totalSessions %></p>
       </div>
-      <div class="stat-card">
-        <span class="text-xs text-gray-500">Terhubung</span>
-        <span class="text-2xl font-bold text-accent"><%= stats.connected %></span>
+      <div class="stat-item">
+        <p class="stat-item-label">Terhubung</p>
+        <p class="stat-item-value stat-item-value--accent"><%= stats.connected %></p>
       </div>
-      <div class="stat-card">
-        <span class="text-xs text-gray-500">Pesan Hari Ini</span>
-        <span class="text-2xl font-bold text-white"><%= stats.messagesToday %></span>
+      <div class="stat-item">
+        <p class="stat-item-label">Pesan hari ini</p>
+        <p class="stat-item-value"><%= stats.messagesToday %></p>
       </div>
-      <div class="stat-card">
-        <span class="text-xs text-gray-500">Antrian Kirim</span>
-        <span class="text-2xl font-bold text-white"><%= stats.queue.pending %></span>
+      <div class="stat-item">
+        <p class="stat-item-label">Antrian</p>
+        <p class="stat-item-value"><%= stats.queue.pending %></p>
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="flex gap-1 p-1 bg-surface-50 border border-surface-200 rounded-xl mb-6 w-fit" role="tablist">
-      <button type="button" class="tab-btn tab-btn-active" data-tab="whatsapp" role="tab">WhatsApp</button>
-      <button type="button" class="tab-btn" data-tab="apikeys" role="tab">API Key</button>
-      <button type="button" class="tab-btn" data-tab="activity" role="tab">Aktivitas</button>
+    <!-- Desktop tabs -->
+    <div class="tabs-desktop" role="tablist" aria-label="Bagian dashboard">
+      <button type="button" class="tab-active" data-tab="whatsapp" role="tab">WhatsApp</button>
+      <button type="button" class="tab" data-tab="apikeys" role="tab">API Key</button>
+      <button type="button" class="tab" data-tab="activity" role="tab">Aktivitas</button>
     </div>
 
-    <!-- TAB: WhatsApp -->
-    <div id="panel-whatsapp" class="tab-panel space-y-6">
-      <div class="card">
-        <div class="flex items-start gap-3 mb-5">
-          <span class="step-num">1</span>
-          <div>
-            <h2 class="section-title">Hubungkan Nomor WhatsApp</h2>
-            <p class="section-desc">Masukkan nomor yang akan dipakai, lalu scan QR dari aplikasi WhatsApp di HP.</p>
+    <!-- WhatsApp -->
+    <div id="panel-whatsapp" class="tab-panel space-y-4 sm:space-y-6">
+      <div class="flow-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="flex items-start gap-3">
+              <span class="step-badge">1</span>
+              <div>
+                <h2 class="card-title">Hubungkan nomor</h2>
+                <p class="card-desc">Masukkan nomor WhatsApp bisnis Anda.</p>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            <form method="POST" action="/dashboard/session/create" class="space-y-4">
+              <div>
+                <label class="label" for="phoneNumber">Nomor WhatsApp</label>
+                <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="628123456789" value="<%= phoneHint || '' %>" class="input" required>
+                <p class="hint">Format: 628123456789 (tanpa + dan tanpa 0 di depan)</p>
+              </div>
+              <div>
+                <label class="label" for="sessionId">ID session <span class="text-txt-muted font-normal">(opsional)</span></label>
+                <input type="text" id="sessionId" name="sessionId" placeholder="Otomatis dari nomor" class="input font-mono text-xs">
+              </div>
+              <button type="submit" class="btn-brand">Buat session &amp; tampilkan QR</button>
+            </form>
           </div>
         </div>
-        <form method="POST" action="/dashboard/session/create" class="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Nomor WhatsApp</label>
-            <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="628123456789" value="<%= phoneHint || '' %>" class="input-field" required>
-            <p class="text-[11px] text-gray-600 mt-1">Format: 62 + nomor tanpa 0 di depan</p>
+
+        <div class="card" id="qrSection">
+          <div class="card-header">
+            <div class="flex items-start gap-3">
+              <span class="step-badge">2</span>
+              <div>
+                <h2 class="card-title">Scan QR code</h2>
+                <p class="card-desc">WhatsApp → Perangkat tertaut → Tautkan perangkat</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">ID Session <span class="text-gray-600">(opsional)</span></label>
-            <input type="text" id="sessionId" name="sessionId" placeholder="Otomatis: wa-628..." class="input-field">
+          <div class="card-body">
+            <div id="qrBox" class="qr-frame">
+              <div class="text-center px-4">
+                <p class="text-sm text-txt-muted">QR akan muncul setelah session dibuat</p>
+              </div>
+            </div>
+            <p id="qrStatus" class="hint text-center mt-3"></p>
           </div>
-          <div class="sm:col-span-2">
-            <button type="submit" class="btn-primary">Buat Session &amp; Tampilkan QR</button>
-          </div>
-        </form>
+        </div>
       </div>
 
-      <div class="card" id="qrSection">
-        <div class="flex items-start gap-3 mb-4">
-          <span class="step-num">2</span>
-          <div class="flex-1">
-            <h2 class="section-title">Scan QR Code</h2>
-            <p class="section-desc">Buka WhatsApp → Perangkat Tertaut → Tautkan perangkat</p>
-          </div>
-        </div>
-        <div id="qrBox" class="flex items-center justify-center bg-surface rounded-xl min-h-[240px] border border-dashed border-surface-200">
-          <div class="text-center px-6">
-            <p class="text-gray-400 text-sm">Buat session di atas untuk menampilkan QR</p>
-            <p class="text-gray-600 text-xs mt-1">atau klik "Tampilkan QR" pada session yang ada</p>
-          </div>
-        </div>
-        <p id="qrStatus" class="text-xs text-gray-500 mt-3 text-center"></p>
-      </div>
-
       <div class="card">
-        <h2 class="section-title mb-1">Daftar Session</h2>
-        <p class="section-desc mb-4">Semua nomor WhatsApp yang terdaftar di sistem.</p>
-        <% if (sessions.length === 0) { %>
-          <div class="empty-state">Belum ada session. Hubungkan nomor WhatsApp di atas.</div>
-        <% } else { %>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Session</th>
-                  <th>Status</th>
-                  <th>Nomor</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% sessions.forEach(s => {
-                  const st = sessionStatus[s.status] || { label: s.status, class: 'badge-muted' };
-                %>
+        <div class="card-header">
+          <h2 class="card-title">Daftar session</h2>
+          <p class="card-desc">Nomor WhatsApp yang terhubung ke sistem.</p>
+        </div>
+        <div class="card-body">
+          <% if (sessions.length === 0) { %>
+            <div class="empty">
+              <p class="empty-text">Belum ada session. Hubungkan nomor di atas.</p>
+            </div>
+          <% } else { %>
+            <div class="session-cards">
+              <%- include('partials/session-list', { sessions, sessionStatus }) %>
+            </div>
+            <div class="table-desktop">
+              <table class="table">
+                <thead>
+                  <tr><th>Session</th><th>Status</th><th>Nomor</th><th>Aksi</th></tr>
+                </thead>
+                <tbody>
+                  <% sessions.forEach(s => {
+                    const st = sessionStatus[s.status] || { label: s.status, class: 'badge-muted' };
+                  %>
                   <tr>
-                    <td class="font-mono text-xs text-gray-300"><%= s.session_id %></td>
+                    <td class="font-mono text-xs text-txt-primary"><%= s.session_id %></td>
                     <td><span class="<%= st.class %>"><%= st.label %></span></td>
-                    <td class="text-gray-400"><%= s.phone_number || '—' %></td>
-                    <td class="whitespace-nowrap">
-                      <button type="button" class="btn-ghost text-accent btn-show-qr" data-session="<%= s.session_id %>">QR</button>
-                      <form method="POST" action="/dashboard/session/<%= s.session_id %>/reconnect" class="inline">
-                        <button type="submit" class="btn-ghost">Sambung ulang</button>
-                      </form>
-                      <form method="POST" action="/dashboard/session/<%= s.session_id %>/disconnect" class="inline">
-                        <button type="submit" class="btn-ghost">Putuskan</button>
-                      </form>
-                      <form method="POST" action="/dashboard/session/<%= s.session_id %>/delete" class="inline" data-confirm="Hapus session <%= s.session_id %>? Data login ikut terhapus.">
-                        <button type="submit" class="btn-danger">Hapus</button>
-                      </form>
+                    <td><%= s.phone_number || '—' %></td>
+                    <td>
+                      <div class="flex flex-wrap gap-1">
+                        <button type="button" class="btn-ghost text-brand btn-show-qr" data-session="<%= s.session_id %>">QR</button>
+                        <form method="POST" action="/dashboard/session/<%= s.session_id %>/reconnect" class="inline"><button type="submit" class="btn-ghost">Ulang</button></form>
+                        <form method="POST" action="/dashboard/session/<%= s.session_id %>/disconnect" class="inline"><button type="submit" class="btn-ghost">Putus</button></form>
+                        <form method="POST" action="/dashboard/session/<%= s.session_id %>/delete" class="inline" data-confirm="Hapus session ini?">
+                          <button type="submit" class="btn-danger">Hapus</button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
-                <% }) %>
-              </tbody>
-            </table>
-          </div>
-        <% } %>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
       </div>
 
       <% if (sessions.length > 0) { %>
       <div class="card">
-        <h2 class="section-title mb-1">Kirim Pesan Uji</h2>
-        <p class="section-desc mb-4">Coba kirim pesan untuk memastikan session berjalan normal.</p>
-        <form method="POST" action="/dashboard/send-test" class="grid sm:grid-cols-2 gap-3">
-          <div class="sm:col-span-2">
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Dari session</label>
-            <select name="sessionId" class="input-field">
-              <% sessions.forEach(s => { %>
-                <option value="<%= s.session_id %>"><%= s.session_id %> — <%= s.phone_number || 'belum terhubung' %></option>
-              <% }) %>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Ke nomor</label>
-            <input type="text" name="to" placeholder="628123456789" class="input-field" required>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Pesan</label>
-            <input type="text" name="message" placeholder="Halo, ini pesan uji" class="input-field" required>
-          </div>
-          <div class="sm:col-span-2">
-            <button type="submit" class="btn-primary">Kirim Pesan</button>
-          </div>
-        </form>
+        <div class="card-header">
+          <h2 class="card-title">Kirim pesan uji</h2>
+          <p class="card-desc">Pastikan session sudah terhubung sebelum mengirim.</p>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/dashboard/send-test" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label class="label">Session</label>
+                <select name="sessionId" class="select">
+                  <% sessions.forEach(s => { %>
+                    <option value="<%= s.session_id %>"><%= s.session_id %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div>
+                <label class="label">Ke nomor</label>
+                <input type="text" name="to" placeholder="628123456789" class="input" required>
+              </div>
+              <div class="sm:col-span-2 lg:col-span-1">
+                <label class="label">Pesan</label>
+                <input type="text" name="message" placeholder="Halo, pesan uji" class="input" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-brand">Kirim pesan</button>
+          </form>
+        </div>
       </div>
       <% } %>
     </div>
 
-    <!-- TAB: API Keys -->
-    <div id="panel-apikeys" class="tab-panel hidden space-y-6">
+    <!-- API Keys -->
+    <div id="panel-apikeys" class="tab-panel hidden space-y-4 sm:space-y-6">
       <div class="card">
-        <h2 class="section-title mb-1">Buat API Key</h2>
-        <p class="section-desc mb-4">Key ini dipakai website Laravel untuk kirim pesan lewat API. Header: <code class="text-gray-400">Authorization: Bearer KEY</code></p>
-        <form method="POST" action="/dashboard/api-keys/create" class="space-y-3 max-w-lg">
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Nama / label</label>
-            <input type="text" name="name" placeholder="Contoh: Website Toko Utama" class="input-field" required>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-400 mb-1.5">Webhook URL <span class="text-gray-600">(opsional)</span></label>
-            <input type="url" name="webhook_url" placeholder="https://website.com/webhook/whatsapp" class="input-field">
-            <p class="text-[11px] text-gray-600 mt-1">Notifikasi otomatis saat ada pesan masuk/keluar</p>
-          </div>
-          <button type="submit" class="btn-primary">Buat API Key</button>
-        </form>
+        <div class="card-header">
+          <h2 class="card-title">Buat API key</h2>
+          <p class="card-desc">Untuk integrasi Laravel. Header: <code class="text-brand font-mono text-xs">Authorization: Bearer KEY</code></p>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="/dashboard/api-keys/create" class="space-y-4 max-w-lg">
+            <div>
+              <label class="label">Nama</label>
+              <input type="text" name="name" placeholder="Website Toko Utama" class="input" required>
+            </div>
+            <div>
+              <label class="label">Webhook URL <span class="text-txt-muted font-normal">(opsional)</span></label>
+              <input type="url" name="webhook_url" placeholder="https://website.com/webhook/wa" class="input">
+            </div>
+            <button type="submit" class="btn-brand">Generate API key</button>
+          </form>
+        </div>
       </div>
 
       <div class="card">
-        <h2 class="section-title mb-4">API Key Aktif</h2>
-        <% if (!apiKeys || apiKeys.length === 0) { %>
-          <div class="empty-state">Belum ada API key. Buat key untuk integrasi Laravel.</div>
-        <% } else { %>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Nama</th>
-                  <th>Key</th>
-                  <th>Status</th>
-                  <th>Terakhir dipakai</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <% apiKeys.forEach(k => { %>
+        <div class="card-header">
+          <h2 class="card-title">Key terdaftar</h2>
+          <p class="card-desc"><%= apiKeys ? apiKeys.length : 0 %> key di sistem</p>
+        </div>
+        <div class="card-body">
+          <% if (!apiKeys || apiKeys.length === 0) { %>
+            <div class="empty"><p class="empty-text">Belum ada API key.</p></div>
+          <% } else { %>
+            <div class="md:hidden space-y-3">
+              <% apiKeys.forEach(k => { %>
+              <div class="session-card">
+                <div class="session-card-top">
+                  <div>
+                    <p class="text-sm font-medium text-txt-primary"><%= k.name %></p>
+                    <p class="font-mono text-xs text-txt-muted mt-1"><%= k.prefix %>••••••</p>
+                  </div>
+                  <% if (k.is_active) { %><span class="badge-success">Aktif</span><% } else { %><span class="badge-error">Nonaktif</span><% } %>
+                </div>
+                <p class="text-xs text-txt-muted">Terakhir dipakai: <%= k.last_used_at || 'Belum' %></p>
+                <% if (k.is_active) { %>
+                <form method="POST" action="/dashboard/api-keys/<%= k.id %>/revoke" data-confirm="Nonaktifkan key ini?">
+                  <button type="submit" class="btn-danger">Nonaktifkan</button>
+                </form>
+                <% } %>
+              </div>
+              <% }) %>
+            </div>
+            <div class="table-desktop">
+              <table class="table">
+                <thead><tr><th>Nama</th><th>Key</th><th>Status</th><th>Dipakai</th><th></th></tr></thead>
+                <tbody>
+                  <% apiKeys.forEach(k => { %>
                   <tr>
-                    <td class="text-gray-200"><%= k.name %></td>
-                    <td class="font-mono text-xs text-gray-500"><%= k.prefix %>••••</td>
-                    <td>
-                      <% if (k.is_active) { %><span class="badge-success">Aktif</span>
-                      <% } else { %><span class="badge-error">Nonaktif</span><% } %>
-                    </td>
-                    <td class="text-xs text-gray-500"><%= k.last_used_at || 'Belum pernah' %></td>
+                    <td class="text-txt-primary font-medium"><%= k.name %></td>
+                    <td class="font-mono text-xs"><%= k.prefix %>••••••</td>
+                    <td><% if (k.is_active) { %><span class="badge-success">Aktif</span><% } else { %><span class="badge-error">Nonaktif</span><% } %></td>
+                    <td class="text-xs"><%= k.last_used_at || 'Belum' %></td>
                     <td>
                       <% if (k.is_active) { %>
-                        <form method="POST" action="/dashboard/api-keys/<%= k.id %>/revoke" data-confirm="Nonaktifkan API key ini? Website tidak bisa kirim pesan lagi.">
-                          <button type="submit" class="btn-danger">Nonaktifkan</button>
-                        </form>
+                      <form method="POST" action="/dashboard/api-keys/<%= k.id %>/revoke" data-confirm="Nonaktifkan key ini?">
+                        <button type="submit" class="btn-danger">Nonaktifkan</button>
+                      </form>
                       <% } %>
                     </td>
                   </tr>
-                <% }) %>
-              </tbody>
-            </table>
-          </div>
-        <% } %>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
       </div>
     </div>
 
-    <!-- TAB: Aktivitas -->
-    <div id="panel-activity" class="tab-panel hidden space-y-6">
+    <!-- Activity -->
+    <div id="panel-activity" class="tab-panel hidden space-y-4 sm:space-y-6">
       <div class="card">
-        <h2 class="section-title mb-1">Pesan Terbaru</h2>
-        <p class="section-desc mb-4">Riwayat pesan masuk dan keluar.</p>
-        <% if (recentMessages.length === 0) { %>
-          <div class="empty-state">Belum ada pesan tercatat.</div>
-        <% } else { %>
-          <div class="space-y-2">
-            <% recentMessages.forEach(m => { %>
-              <div class="flex items-center justify-between py-2 border-b border-surface-200/40 text-sm">
-                <div>
-                  <span class="text-gray-300"><%= m.session_id %></span>
-                  <span class="text-gray-600 mx-1">→</span>
-                  <span class="text-gray-400"><%= m.to_number %></span>
+        <div class="card-header">
+          <h2 class="card-title">Pesan terbaru</h2>
+        </div>
+        <div class="card-body p-0 sm:p-0">
+          <% if (recentMessages.length === 0) { %>
+            <div class="empty"><p class="empty-text">Belum ada pesan.</p></div>
+          <% } else { %>
+            <div>
+              <% recentMessages.forEach(m => { %>
+              <div class="list-item">
+                <div class="min-w-0 text-sm">
+                  <p class="text-txt-primary font-medium truncate"><%= m.session_id %></p>
+                  <p class="text-xs text-txt-muted truncate">→ <%= m.to_number %></p>
                 </div>
-                <span class="<%= m.direction === 'outbound' ? 'badge-success' : 'badge-muted' %>">
-                  <%= m.direction === 'outbound' ? 'Keluar' : 'Masuk' %> · <%= m.status %>
+                <span class="<%= m.direction === 'outbound' ? 'badge-success' : 'badge-muted' %> shrink-0">
+                  <%= m.direction === 'outbound' ? 'Keluar' : 'Masuk' %>
                 </span>
               </div>
-            <% }) %>
-          </div>
-        <% } %>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
       </div>
 
       <div class="card">
-        <h2 class="section-title mb-1">Log Sistem</h2>
-        <p class="section-desc mb-4">Aktivitas API dan kejadian penting.</p>
-        <% if (!auditLogs || auditLogs.length === 0) { %>
-          <div class="empty-state">Belum ada log aktivitas.</div>
-        <% } else { %>
-          <div class="table-wrap">
-            <table class="data-table text-xs">
-              <thead>
-                <tr>
-                  <th>Waktu</th>
-                  <th>Kejadian</th>
-                  <th>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% auditLogs.forEach(log => { %>
+        <div class="card-header">
+          <h2 class="card-title">Log sistem</h2>
+        </div>
+        <div class="card-body">
+          <% if (!auditLogs || auditLogs.length === 0) { %>
+            <div class="empty"><p class="empty-text">Belum ada aktivitas.</p></div>
+          <% } else { %>
+            <div class="md:hidden space-y-2">
+              <% auditLogs.forEach(log => { %>
+              <div class="session-card">
+                <p class="text-xs text-txt-muted"><%= log.created_at %></p>
+                <p class="text-sm font-medium text-txt-primary mt-1"><%= auditLabels[log.action] || log.action %></p>
+                <p class="text-xs text-txt-muted mt-1 truncate"><%= log.resource || log.ip_address || '—' %></p>
+              </div>
+              <% }) %>
+            </div>
+            <div class="table-desktop">
+              <table class="table text-xs">
+                <thead><tr><th>Waktu</th><th>Kejadian</th><th>Detail</th></tr></thead>
+                <tbody>
+                  <% auditLogs.forEach(log => { %>
                   <tr>
-                    <td class="text-gray-500 whitespace-nowrap"><%= log.created_at %></td>
-                    <td class="text-gray-300"><%= auditLabels[log.action] || log.action %></td>
-                    <td class="text-gray-500 truncate max-w-[200px]"><%= log.resource || log.ip_address || '—' %></td>
+                    <td class="whitespace-nowrap text-txt-muted"><%= log.created_at %></td>
+                    <td class="text-txt-primary"><%= auditLabels[log.action] || log.action %></td>
+                    <td class="truncate max-w-[200px]"><%= log.resource || log.ip_address || '—' %></td>
                   </tr>
-                <% }) %>
-              </tbody>
-            </table>
-          </div>
-        <% } %>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
       </div>
     </div>
-  </main>
+  </div>
 
+  <!-- Mobile bottom nav -->
+  <nav class="mobile-bottom-nav" role="tablist" aria-label="Navigasi dashboard">
+    <button type="button" class="mobile-nav-item active" data-tab="whatsapp" role="tab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      WhatsApp
+    </button>
+    <button type="button" class="mobile-nav-item" data-tab="apikeys" role="tab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+      API Key
+    </button>
+    <button type="button" class="mobile-nav-item" data-tab="activity" role="tab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Aktivitas
+    </button>
+    <a href="/dashboard/settings" class="mobile-nav-item">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      Profil
+    </a>
+  </nav>
+
+  <%- include('partials/layout-end') %>
   <script src="/public/js/dashboard.js" defer></script>
 </body>
 </html>

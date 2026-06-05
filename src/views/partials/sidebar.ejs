@@ -1,0 +1,80 @@
+<% const initials = (currentUser?.email || 'A').charAt(0).toUpperCase(); %>
+<% const name = (currentUser?.email || '').split('@')[0]; %>
+
+<!-- Mobile top bar -->
+<header class="mobile-topbar">
+  <div class="flex items-center gap-3 min-w-0">
+    <button type="button" id="btnMenu" class="btn-icon" aria-label="Menu">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold truncate"><%= typeof pageTitle !== 'undefined' ? pageTitle : 'WSM' %></p>
+      <p class="text-[10px] text-txt-muted truncate"><%= currentUser?.email %></p>
+    </div>
+  </div>
+  <a href="/logout" class="btn-outline shrink-0">Keluar</a>
+</header>
+
+<!-- Mobile drawer -->
+<div id="mobileDrawer" class="mobile-drawer" aria-hidden="true">
+  <div class="mobile-drawer-backdrop" id="drawerBackdrop"></div>
+  <div class="mobile-drawer-panel">
+    <div class="sidebar-brand">
+      <span class="sidebar-brand-icon">W</span>
+      <div>
+        <p class="font-bold text-sm">WSM Panel</p>
+        <p class="text-[10px] text-txt-muted">WhatsApp Service</p>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="<%= activePage === 'dashboard' ? 'sidebar-link-active' : 'sidebar-link' %>">Beranda</a>
+      <% if (currentUser && currentUser.role === 'super_admin') { %>
+      <a href="/dashboard/users" class="<%= activePage === 'users' ? 'sidebar-link-active' : 'sidebar-link' %>">Pengguna</a>
+      <% } %>
+      <a href="/dashboard/settings" class="<%= activePage === 'settings' ? 'sidebar-link-active' : 'sidebar-link' %>">Profil &amp; Password</a>
+      <a href="/docs" class="sidebar-link">Dokumentasi API</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="flex items-center gap-3 px-1">
+        <span class="sidebar-avatar"><%= initials %></span>
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate"><%= name %></p>
+          <p class="text-[10px] text-txt-muted"><%= currentUser?.role %></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-shell">
+  <!-- Desktop sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-brand-icon">W</span>
+      <div>
+        <p class="font-bold text-sm">WSM</p>
+        <p class="text-[10px] text-txt-muted">WhatsApp Service</p>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <p class="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-txt-muted">Menu</p>
+      <a href="/dashboard" class="<%= activePage === 'dashboard' ? 'sidebar-link-active' : 'sidebar-link' %>">Beranda</a>
+      <% if (currentUser && currentUser.role === 'super_admin') { %>
+      <a href="/dashboard/users" class="<%= activePage === 'users' ? 'sidebar-link-active' : 'sidebar-link' %>">Pengguna</a>
+      <% } %>
+      <a href="/dashboard/settings" class="<%= activePage === 'settings' ? 'sidebar-link-active' : 'sidebar-link' %>">Profil</a>
+      <a href="/docs" class="sidebar-link">Dokumentasi</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="flex items-center gap-3 px-1 mb-2">
+        <span class="sidebar-avatar"><%= initials %></span>
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate"><%= name %></p>
+          <p class="text-[10px] text-txt-muted truncate"><%= currentUser?.email %></p>
+        </div>
+      </div>
+      <a href="/logout" class="sidebar-link text-txt-muted hover:text-red-400 text-xs">Keluar</a>
+    </div>
+  </aside>
+
+  <div class="main-content">
