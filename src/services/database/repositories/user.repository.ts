@@ -41,4 +41,46 @@ export const userRepository = {
   list(): UserRow[] {
     return db.getDb().prepare('SELECT * FROM users ORDER BY id').all() as UserRow[];
   },
+
+  updatePassword(email: string, passwordHash: string): boolean {
+    const result = db
+      .getDb()
+      .prepare(
+        `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?`,
+      )
+      .run(passwordHash, email);
+    return result.changes > 0;
+  },
+
+  updateAdmin(
+    email: string,
+    data: { password_hash?: string; name?: string; new_email?: string },
+  ): boolean {
+    const sets: string[] = ["updated_at = datetime('now')"];
+    const params: string[] = [];
+
+    if (data.password_hash) {
+      sets.push('password_hash = ?');
+      params.push(data.password_hash);
+    }
+    if (data.name) {
+      sets.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.new_email) {
+      sets.push('email = ?');
+      params.push(data.new_email);
+    }
+
+    params.push(email);
+    const result = db
+      .getDb()
+      .prepare(`UPDATE users SET ${sets.join(', ')} WHERE email = ?`)
+      .run(...params);
+    return result.changes > 0;
+  },
+
+  deleteAll(): void {
+    db.getDb().prepare('DELETE FROM users').run();
+  },
 };
