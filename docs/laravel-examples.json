@@ -31,7 +31,7 @@
   },
   "env": {
     "WHATSAPP_API_URL": "https://whatsapp.baytgo.id",
-    "WHATSAPP_API_KEY": "K7mN2pQx9vB4cRw",
+    "WHATSAPP_API_KEY": "K7mN2pQx9vB4cRw"
   },
   "endpoints": {
     "createSession": {

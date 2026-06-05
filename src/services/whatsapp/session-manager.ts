@@ -2,6 +2,7 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
   useMultiFileAuthState,
   type WASocket,
   type WAMessage,
@@ -12,12 +13,14 @@ import QRCode from 'qrcode';
 import { config } from '../../config/index.js';
 import type { MessagePayload, SessionStatus } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import { toJid, formatDisplayPhone } from '../../utils/phone.js';
+import { formatDisplayPhone } from '../../utils/phone.js';
 import { sessionRepository } from '../database/repositories/session.repository.js';
 import { messageRepository } from '../database/repositories/message.repository.js';
 import { waLogger } from '../logger/index.js';
 import { waEventBus } from './event-bus.js';
 import { webhookService } from '../webhook/webhook.service.js';
+import { waMessageStore } from './message-store.js';
+import { resolveRecipientJid } from './resolve-recipient.js';
 
 interface SessionInstance {
   socket: WASocket | null;
@@ -229,13 +232,16 @@ class SessionManager {
 
       const socket = makeWASocket({
         version,
-        auth: state,
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, waLogger),
+        },
         browser: Browsers.ubuntu('Chrome'),
         printQRInTerminal: false,
         syncFullHistory: false,
         markOnlineOnConnect: false,
         generateHighQualityLinkPreview: false,
-        getMessage: async () => undefined,
+        getMessage: async (key) => waMessageStore.get(key),
       });
 
       inst.socket = socket;
@@ -326,9 +332,14 @@ class SessionManager {
       });
 
       socket.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
-        if (type !== 'notify') return;
         for (const msg of msgs) {
-          await this.handleIncomingMessage(sessionId, msg);
+          if (msg.key && msg.message) {
+            waMessageStore.save(msg.key, msg.message);
+            waMessageStore.learnJidMapping(msg.key);
+          }
+          if (type === 'notify') {
+            await this.handleIncomingMessage(sessionId, msg);
+          }
         }
       });
 
@@ -421,7 +432,7 @@ class SessionManager {
       throw new AppError('Session not connected', ERR.SESSION_NOT_CONNECTED, 400);
     }
 
-    const jid = toJid(to);
+    const jid = await resolveRecipientJid(socket, to);
     let result: WAMessage | undefined;
 
     switch (payload.type) {
@@ -477,6 +488,10 @@ class SessionManager {
 
     if (!result) {
       throw new AppError('Failed to send message', ERR.MESSAGE_FAILED, 500);
+    }
+
+    if (result.key && result.message) {
+      waMessageStore.save(result.key, result.message);
     }
 
     const messageId = result.key.id ?? `local-${Date.now()}`;
