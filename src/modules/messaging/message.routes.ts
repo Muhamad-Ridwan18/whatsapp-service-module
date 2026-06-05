@@ -8,6 +8,7 @@ import { parseSendRequestBody } from './send.helper.js';
 import type { ParsedSendMessage } from './send.helper.js';
 import { normalizeUrlFields, readSendRequest } from './read-send-request.js';
 import { assertApiKeySessionAccess } from '../../utils/session-access.js';
+import { AppError, ERR } from '../../utils/errors.js';
 
 function toPayload(body: ParsedSendMessage): MessagePayload {
   return {
@@ -35,6 +36,14 @@ async function handleSendMessage(
     request.apiKey!,
     file,
   );
+
+  if (!file && !body.mediaUrl && body.type !== 'text' && body.type !== 'location' && body.type !== 'contact') {
+    throw new AppError(
+      'Kirim file via field `url` (publik) atau upload multipart field `file`',
+      ERR.VALIDATION,
+      422,
+    );
+  }
   assertApiKeySessionAccess(request.apiKey!, body.sessionId);
 
   const jobId = messageQueue.enqueue(

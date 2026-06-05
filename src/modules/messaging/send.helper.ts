@@ -83,16 +83,18 @@ export function parseSendRequestBody(
     return parsed;
   }
 
+  const mediaType = inferMediaType({
+    type: parsed.type,
+    fileName: parsed.fileName ?? file.filename,
+    mimetype: parsed.mimetype ?? file.mimetype,
+    mediaUrl: parsed.mediaUrl,
+  });
+
   return {
     ...parsed,
     mediaBuffer: file.buffer,
-    fileName: parsed.fileName ?? file.filename,
-    mimetype: parsed.mimetype ?? file.mimetype,
-    type: inferMediaType({
-      type: parsed.type,
-      fileName: parsed.fileName ?? file.filename,
-      mimetype: parsed.mimetype ?? file.mimetype,
-      mediaUrl: parsed.mediaUrl,
-    }),
+    fileName: parsed.fileName ?? file.filename ?? 'file',
+    mimetype: parsed.mimetype ?? file.mimetype ?? 'application/octet-stream',
+    type: mediaType === 'text' ? 'document' : mediaType,
   };
 }

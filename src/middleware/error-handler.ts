@@ -25,6 +25,16 @@ export function errorHandler(
     return;
   }
 
+  if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+    void sendError(reply, 'File terlalu besar (maks 16MB)', 'ERR_VALIDATION', 413);
+    return;
+  }
+
+  if (error.code === 'FST_INVALID_MULTIPART_CONTENT_TYPE') {
+    void sendError(reply, 'Content-Type multipart tidak valid', 'ERR_VALIDATION', 400);
+    return;
+  }
+
   logger.error({ err: error }, 'Unhandled error');
   void sendError(reply, 'Internal server error', 'ERR_INTERNAL', 500);
 }

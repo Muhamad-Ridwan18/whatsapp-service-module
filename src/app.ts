@@ -61,7 +61,12 @@ export async function buildApp() {
   await app.register(cookie);
   await app.register(formbody);
   await app.register(multipart, {
-    limits: { fileSize: 16 * 1024 * 1024 },
+    limits: {
+      fileSize: 16 * 1024 * 1024,
+      files: 1,
+      parts: 20,
+    },
+    throwFileSizeLimit: true,
   });
   await app.register(websocket);
 
