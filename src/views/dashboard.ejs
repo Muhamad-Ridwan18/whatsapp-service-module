@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <%- include('partials/head', { title: title || 'Dashboard' }) %>
+</head>
+<body
+  class="bg-surface min-h-screen font-sans text-gray-200"
+  data-scan-session="<%= scanSession || '' %>"
+>
+  <nav class="border-b border-surface-200 bg-surface-50/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-8 h-8 rounded-lg bg-accent/20 text-accent flex items-center justify-center text-sm font-bold">WS</span>
+        <span class="font-semibold text-white text-sm">WhatsApp Service</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="/docs" class="text-gray-400 hover:text-white">API</a>
+        <a href="/health" class="text-gray-400 hover:text-white">Health</a>
+        <a href="/logout" class="btn-secondary text-xs py-1.5 px-3">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <% if (errorMessage) { %>
+      <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+        <%= errorMessage %>
+      </div>
+    <% } %>
+
+    <% if (newApiKey) { %>
+      <div class="p-4 rounded-xl bg-accent/10 border border-accent/40">
+        <p class="text-sm font-semibold text-accent mb-1">API Key berhasil dibuat — simpan sekarang!</p>
+        <p class="text-xs text-gray-400 mb-3">Key ini hanya ditampilkan sekali. Copy dan masukkan ke Laravel <code>.env</code></p>
+        <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <code id="newApiKeyValue" class="flex-1 bg-surface px-3 py-2 rounded-lg text-sm text-white font-mono break-all"><%= newApiKey %></code>
+          <button type="button" id="btnCopyKey" class="btn-primary whitespace-nowrap">Copy Key</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Header: <code>Authorization: Bearer &lt;API_KEY&gt;</code></p>
+      </div>
+    <% } %>
+
+    <!-- API Keys -->
+    <div class="card">
+      <h2 class="text-sm font-semibold text-white mb-1">API Keys</h2>
+      <p class="text-xs text-gray-500 mb-3">Key untuk integrasi Laravel / aplikasi eksternal. Dashboard pakai login, API pakai key ini.</p>
+      <form method="POST" action="/dashboard/api-keys/create" class="flex flex-col sm:flex-row gap-2 mb-4">
+        <input type="text" name="name" placeholder="Nama key, contoh: Laravel Production" class="input-field flex-1" required>
+        <button type="submit" class="btn-primary whitespace-nowrap">Generate API Key</button>
+      </form>
+      <% if (apiKeys && apiKeys.length > 0) { %>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="text-left text-gray-500 border-b border-surface-200">
+                <th class="pb-2 pr-3">Nama</th>
+                <th class="pb-2 pr-3">Prefix</th>
+                <th class="pb-2 pr-3">Status</th>
+                <th class="pb-2">Terakhir dipakai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% apiKeys.forEach(k => { %>
+                <tr class="border-b border-surface-200/40">
+                  <td class="py-2 pr-3 text-gray-300"><%= k.name %></td>
+                  <td class="py-2 pr-3 font-mono text-gray-400"><%= k.prefix %>...</td>
+                  <td class="py-2 pr-3">
+                    <span class="<%= k.is_active ? 'text-accent' : 'text-red-400' %>"><%= k.is_active ? 'aktif' : 'nonaktif' %></span>
+                  </td>
+                  <td class="py-2 text-gray-500"><%= k.last_used_at || 'belum dipakai' %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } else { %>
+        <p class="text-xs text-gray-500">Belum ada API key. Klik <strong>Generate API Key</strong> di atas.</p>
+      <% } %>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="card">
+        <p class="text-xs text-gray-500">Sessions</p>
+        <p class="text-2xl font-bold text-white mt-1"><%= stats.totalSessions %></p>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500">Connected</p>
+        <p class="text-2xl font-bold text-accent mt-1"><%= stats.connected %></p>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500">Messages Today</p>
+        <p class="text-2xl font-bold text-white mt-1"><%= stats.messagesToday %></p>
+      </div>
+      <div class="card">
+        <p class="text-xs text-gray-500">Queue</p>
+        <p class="text-2xl font-bold text-white mt-1"><%= stats.queue.pending %></p>
+        <p class="text-xs text-gray-600">failed: <%= stats.queue.failed %></p>
+      </div>
+    </div>
+
+    <!-- Create Session -->
+    <div class="card">
+      <h2 class="text-sm font-semibold text-white mb-1">Buat Session Baru</h2>
+      <p class="text-xs text-gray-500 mb-3">Masukkan nomor WhatsApp yang akan dihubungkan, lalu scan QR dari HP tersebut.</p>
+      <form method="POST" action="/dashboard/session/create" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div class="sm:col-span-1">
+          <label class="block text-xs text-gray-400 mb-1">Nomor WhatsApp *</label>
+          <input
+            type="tel"
+            id="phoneNumber"
+            name="phoneNumber"
+            placeholder="628123456789"
+            value="<%= phoneHint || '' %>"
+            pattern="[0-9+\s-]{10,16}"
+            class="input-field w-full"
+            required
+          >
+        </div>
+        <div class="sm:col-span-1">
+          <label class="block text-xs text-gray-400 mb-1">Session ID</label>
+          <input
+            type="text"
+            id="sessionId"
+            name="sessionId"
+            placeholder="otomatis: wa-628..."
+            pattern="[a-zA-Z0-9_-]{2,50}"
+            class="input-field w-full"
+          >
+        </div>
+        <div class="sm:col-span-2 lg:col-span-2 flex items-end">
+          <button type="submit" class="btn-primary w-full sm:w-auto">Buat Session &amp; Tampilkan QR</button>
+        </div>
+      </form>
+      <p class="text-xs text-gray-500 mt-2">Format: kode negara tanpa +, contoh <code class="text-accent">628123456789</code>. Session ID otomatis dari nomor jika dikosongkan.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <!-- QR Scanner -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-white mb-3">QR Scanner</h2>
+        <div class="flex gap-2 mb-3">
+          <select id="qrSession" class="input-field flex-1">
+            <% if (sessions.length === 0) { %>
+              <option value="" disabled selected>Belum ada session</option>
+            <% } else { %>
+              <% sessions.forEach(s => { %>
+                <option value="<%= s.session_id %>" <%= scanSession === s.session_id ? 'selected' : '' %>>
+                  <%= s.session_id %><%= s.phone_number ? ' (' + s.phone_number + ')' : '' %> — <%= s.status %>
+                </option>
+              <% }) %>
+            <% } %>
+          </select>
+          <button id="btnScanQr" type="button" class="btn-primary" <%= sessions.length === 0 ? 'disabled' : '' %>>Scan</button>
+        </div>
+        <div id="qrBox" class="flex items-center justify-center bg-surface rounded-lg min-h-[220px] border border-surface-200">
+          <p class="text-gray-500 text-sm text-center px-4">Masukkan nomor HP di atas untuk membuat session, lalu scan QR di sini</p>
+        </div>
+        <p id="qrStatus" class="text-xs text-gray-500 mt-2"></p>
+      </div>
+
+      <!-- Test Send -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-white mb-3">Test Message</h2>
+        <form method="POST" action="/dashboard/send-test" class="space-y-3">
+          <select name="sessionId" class="input-field">
+            <% sessions.forEach(s => { %>
+              <option value="<%= s.session_id %>"><%= s.session_id %><%= s.phone_number ? ' (' + s.phone_number + ')' : '' %></option>
+            <% }) %>
+          </select>
+          <input type="text" name="to" placeholder="628123456789" class="input-field" required>
+          <textarea name="message" rows="3" placeholder="Test message..." class="input-field" required></textarea>
+          <button type="submit" class="btn-primary w-full">Send via Queue</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="card overflow-x-auto">
+      <h2 class="text-sm font-semibold text-white mb-3">Sessions</h2>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b border-surface-200">
+            <th class="pb-2 pr-4">ID</th>
+            <th class="pb-2 pr-4">Status</th>
+            <th class="pb-2 pr-4">Phone</th>
+            <th class="pb-2">Last Connected</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (sessions.length === 0) { %>
+            <tr><td colspan="4" class="py-4 text-gray-500 text-center">Belum ada session</td></tr>
+          <% } %>
+          <% sessions.forEach(s => { %>
+            <tr class="border-b border-surface-200/50">
+              <td class="py-2 pr-4 font-mono text-xs"><%= s.session_id %></td>
+              <td class="py-2 pr-4">
+                <span class="px-2 py-0.5 rounded text-xs <%= s.status === 'connected' ? 'bg-accent/20 text-accent' : 'bg-surface-200 text-gray-400' %>">
+                  <%= s.status %>
+                </span>
+              </td>
+              <td class="py-2 pr-4 text-gray-400"><%= s.phone_number || '-' %></td>
+              <td class="py-2 text-gray-500 text-xs"><%= s.last_connected_at || '-' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="card">
+        <h2 class="text-sm font-semibold text-white mb-3">Realtime Logs</h2>
+        <div id="logBox" class="h-48 overflow-y-auto font-mono text-xs space-y-1 text-gray-400"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="text-sm font-semibold text-white mb-3">Recent Messages</h2>
+        <div class="h-48 overflow-y-auto text-xs space-y-2">
+          <% recentMessages.forEach(m => { %>
+            <div class="flex justify-between border-b border-surface-200/30 pb-1">
+              <span class="text-gray-400"><%= m.session_id %> → <%= m.to_number %></span>
+              <span class="<%= m.direction === 'outbound' ? 'text-accent' : 'text-blue-400' %>"><%= m.status %></span>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/public/js/dashboard.js" defer></script>
+</body>
+</html>
