@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { verifyWsCookie } from '../dashboard/dashboard.helper.js';
+import { verifyWsCookie, assertDashboardSessionAccess } from '../dashboard/dashboard.helper.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { waEventBus } from '../../services/whatsapp/event-bus.js';
 import { sessionRepository } from '../../services/database/repositories/session.repository.js';
@@ -7,7 +7,7 @@ import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
 import { apiKeyAuth, jwtAuth, requirePermission } from '../../middleware/auth.js';
 import { createSessionSchema, sessionIdParamSchema } from './session.schema.js';
-import { assertApiKeySessionAccess, canApiKeyAccessSession } from '../../utils/session-access.js';
+import { assertApiKeySessionAccess } from '../../utils/session-access.js';
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/session/create', {
@@ -19,9 +19,18 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const body = createSessionSchema.parse(request.body);
     const apiKey = request.apiKey!;
+    const bound = sessionRepository.findByApiKeyId(apiKey.id);
+    if (bound && bound.session_id !== body.sessionId) {
+      throw new AppError(
+        `API key terikat ke session "${bound.session_id}"`,
+        ERR.SESSION_EXISTS,
+        409,
+      );
+    }
+
     const existing = sessionRepository.findBySessionId(body.sessionId);
-    if (existing && !canApiKeyAccessSession(apiKey, existing)) {
-      throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+    if (existing && existing.api_key_id && existing.api_key_id !== apiKey.id) {
+      throw new AppError('Session milik API key lain', ERR.FORBIDDEN, 403);
     }
 
     await sessionManager.create(body.sessionId, {
@@ -116,12 +125,25 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/ws/session/:sessionId/qr', { websocket: true }, (socket, request) => {
-    if (!verifyWsCookie(request, request.server)) {
+    const authUser = verifyWsCookie(request, request.server);
+    if (!authUser) {
       socket.close(1008, 'Unauthorized');
       return;
     }
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+
+    try {
+      assertDashboardSessionAccess(authUser, sessionId);
+    } catch {
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Session bukan milik akun Anda',
+        status: 'failed',
+      }));
+      socket.close(1008, 'Forbidden');
+      return;
+    }
 
     let lastSentQr: string | null = null;
     let lastSentStatus: string | null = null;

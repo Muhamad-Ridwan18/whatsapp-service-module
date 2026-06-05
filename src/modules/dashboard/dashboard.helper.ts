@@ -53,8 +53,39 @@ export function requireDashboardRole(
   }
 }
 
+export function isDashboardAdmin(role: UserRole): boolean {
+  return role === 'super_admin' || role === 'admin';
+}
+
+export function canDashboardAccessSession(
+  authUser: JwtPayload,
+  session: { user_id: number | null } | undefined,
+): boolean {
+  if (!session) return false;
+  if (isDashboardAdmin(authUser.role)) return true;
+  return session.user_id === authUser.sub;
+}
+
+export function assertDashboardSessionAccess(
+  authUser: JwtPayload,
+  sessionId: string,
+) {
+  const session = sessionRepository.findBySessionId(sessionId);
+  if (!session) {
+    throw new AppError('Session tidak ditemukan', ERR.SESSION_NOT_FOUND, 404);
+  }
+  if (!canDashboardAccessSession(authUser, session)) {
+    throw new AppError(
+      'Session ini bukan milik akun Anda. Hubungi admin untuk nomor yang sama.',
+      ERR.FORBIDDEN,
+      403,
+    );
+  }
+  return session;
+}
+
 export function getSessionsForUser(userId: number, role: UserRole) {
-  if (role === 'super_admin' || role === 'admin') {
+  if (isDashboardAdmin(role)) {
     return sessionRepository.list();
   }
   return sessionRepository.listByUserId(userId);

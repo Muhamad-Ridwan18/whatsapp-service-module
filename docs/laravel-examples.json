@@ -18,6 +18,10 @@
     "endpoint": {
       "fonnte": "POST /send",
       "wsm": "POST /api/message/send atau POST /send (alias)"
+    },
+    "sessionId": {
+      "fonnte": "Tidak perlu — Fonnte pakai device di dashboard mereka",
+      "wsm": "Tidak perlu — session otomatis dari API key (1 key = 1 session WhatsApp)"
     }
   },
   "baseUrl": "https://whatsapp.baytgo.id",
@@ -28,7 +32,6 @@
   "env": {
     "WHATSAPP_API_URL": "https://whatsapp.baytgo.id",
     "WHATSAPP_API_KEY": "wsm_your_key_here",
-    "WHATSAPP_SESSION_ID": "wa-628123456789"
   },
   "endpoints": {
     "createSession": {
@@ -82,7 +85,6 @@
         "message": "Halo, pesanan Anda sudah dikirim!"
       },
       "bodyFonnteStyle": {
-        "sessionId": "wa-628123456789",
         "target": "08987654321",
         "countryCode": "62",
         "message": "Halo, pesanan Anda sudah dikirim!"
@@ -120,7 +122,6 @@
         "caption": "Invoice pesanan #001"
       },
       "bodyFonnteStyle": {
-        "sessionId": "wa-628123456789",
         "target": "8987654321",
         "countryCode": "62",
         "url": "https://your-cdn.com/invoices/INV-001.pdf",
@@ -134,7 +135,6 @@
       "contentType": "application/x-www-form-urlencoded",
       "note": "Alias kompatibel Fonnte. Auth: Authorization: {apiKey} atau Bearer {apiKey}",
       "fields": {
-        "sessionId": "wa-628123456789",
         "target": "08987654321",
         "countryCode": "62",
         "message": "Halo dari Laravel"
@@ -191,7 +191,7 @@
   },
   "laravelHttpExample": {
     "description": "Contoh Http:: facade Laravel",
-    "code": "Http::withToken(config('whatsapp.api_key'))\n    ->post(config('whatsapp.url') . '/api/message/send', [\n        'sessionId' => config('whatsapp.session_id'),\n        'to'        => '628987654321',\n        'type'      => 'text',\n        'message'   => 'Halo dari Laravel',\n    ])\n    ->json();"
+    "code": "Http::withHeaders(['Authorization' => config('services.fonnte.token')])\n    ->asForm()\n    ->post(config('services.fonnte.url'), [\n        'target'      => '08987654321',\n        'countryCode' => '62',\n        'message'     => 'Halo dari Laravel',\n    ])\n    ->json();"
   },
   "permissions": {
     "message:send": "Kirim pesan",

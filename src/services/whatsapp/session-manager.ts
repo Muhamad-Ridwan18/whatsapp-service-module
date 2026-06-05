@@ -108,6 +108,17 @@ class SessionManager {
     if (phoneNumber) {
       const byPhone = sessionRepository.findByPhoneNumber(phoneNumber);
       if (byPhone && byPhone.session_id !== sessionId) {
+        if (
+          options?.userId &&
+          byPhone.user_id &&
+          byPhone.user_id !== options.userId
+        ) {
+          throw new AppError(
+            `Nomor ${phoneNumber} sudah digunakan akun lain`,
+            ERR.FORBIDDEN,
+            403,
+          );
+        }
         throw new AppError(
           `Nomor ${phoneNumber} sudah terdaftar pada session "${byPhone.session_id}"`,
           ERR.SESSION_EXISTS,
@@ -116,7 +127,17 @@ class SessionManager {
       }
     }
 
+    const existingBeforeCreate = sessionRepository.findBySessionId(sessionId);
+    if (existingBeforeCreate?.user_id && options?.userId &&
+        existingBeforeCreate.user_id !== options.userId) {
+      throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+    }
+
     if (this.sessions.has(sessionId) && this.getStatus(sessionId) !== 'failed') {
+      if (existingBeforeCreate?.user_id && options?.userId &&
+          existingBeforeCreate.user_id !== options.userId) {
+        throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
+      }
       throw new AppError('Session already exists', ERR.SESSION_EXISTS, 409);
     }
 
@@ -133,8 +154,16 @@ class SessionManager {
         status: 'initializing',
         phone_number: phoneNumber ?? null,
       });
-    } else if (phoneNumber) {
-      sessionRepository.setPhoneNumber(sessionId, phoneNumber);
+    } else {
+      if (options?.userId && !existing.user_id) {
+        sessionRepository.setOwner(sessionId, options.userId);
+      }
+      if (options?.apiKeyId && existing.api_key_id !== options.apiKeyId) {
+        sessionRepository.bindApiKey(sessionId, options.apiKeyId);
+      }
+      if (phoneNumber) {
+        sessionRepository.setPhoneNumber(sessionId, phoneNumber);
+      }
     }
 
     await this.connect(sessionId);

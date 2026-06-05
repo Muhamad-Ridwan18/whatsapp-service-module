@@ -6,9 +6,7 @@ export function canApiKeyAccessSession(
   apiKey: ApiKeyRow,
   session: SessionRow,
 ): boolean {
-  if (session.api_key_id === apiKey.id) return true;
-  if (session.user_id === apiKey.user_id) return true;
-  return false;
+  return session.api_key_id === apiKey.id;
 }
 
 export function assertApiKeySessionAccess(

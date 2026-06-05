@@ -105,4 +105,23 @@ export const migrations: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_api_key_unique
+        ON sessions(api_key_id) WHERE api_key_id IS NOT NULL;
+
+      UPDATE sessions
+      SET api_key_id = (
+        SELECT ak.id FROM api_keys ak
+        WHERE ak.user_id = sessions.user_id AND ak.is_active = 1
+        LIMIT 1
+      )
+      WHERE api_key_id IS NULL
+        AND user_id IS NOT NULL
+        AND (
+          SELECT COUNT(*) FROM sessions s2 WHERE s2.user_id = sessions.user_id
+        ) = 1;
+    `,
+  },
 ];

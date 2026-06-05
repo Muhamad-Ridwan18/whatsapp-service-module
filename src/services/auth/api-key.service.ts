@@ -1,4 +1,5 @@
 import { apiKeyRepository } from '../database/repositories/api-key.repository.js';
+import { sessionRepository } from '../database/repositories/session.repository.js';
 import { generateApiKey } from '../../utils/crypto.js';
 import { AppError, ERR } from '../../utils/errors.js';
 
@@ -22,6 +23,8 @@ export function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
     );
   }
 
+  const previousKeyId = active?.id;
+
   if (active) {
     apiKeyRepository.deactivateAllByUserId(userId);
   }
@@ -41,6 +44,16 @@ export function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
       : undefined,
     ip_whitelist: input.ip_whitelist,
   });
+
+  if (previousKeyId) {
+    sessionRepository.transferApiKeyBindings(previousKeyId, id);
+  } else {
+    const userSessions = sessionRepository.listByUserId(userId);
+    const unbound = userSessions.filter((s) => s.api_key_id == null);
+    if (unbound.length === 1) {
+      sessionRepository.bindApiKey(unbound[0].session_id, id);
+    }
+  }
 
   return { id, apiKey: key, prefix, replaced: !!active };
 }

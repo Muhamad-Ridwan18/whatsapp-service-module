@@ -276,10 +276,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"target\": \"08987654321\",\n  \"countryCode\": \"62\",\n  \"message\": \"Halo, gaya Fonnte\"\n}"
+              "raw": "{\n  \"target\": \"08987654321\",\n  \"countryCode\": \"62\",\n  \"message\": \"Halo, gaya Fonnte\"\n}"
             },
             "url": "{{baseUrl}}/api/message/send",
-            "description": "Format Fonnte: `target` domestik + `countryCode` (default 62 jika kosong)"
+            "description": "Format Fonnte: `target` + `countryCode`. Session otomatis dari API key."
           },
           "response": []
         },
@@ -293,14 +293,13 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "sessionId", "value": "{{sessionId}}" },
                 { "key": "target", "value": "08987654321" },
                 { "key": "countryCode", "value": "62" },
                 { "key": "message", "value": "Halo dari form-urlencoded" }
               ]
             },
             "url": "{{baseUrl}}/send",
-            "description": "Alias endpoint Fonnte. Auth bisa `Authorization: {{apiKey}}` tanpa Bearer."
+            "description": "Alias Fonnte. Cukup API key + target + message. Session dari API key."
           },
           "response": []
         },

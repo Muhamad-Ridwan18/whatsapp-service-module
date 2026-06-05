@@ -5,6 +5,7 @@ import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
 import { verifyPassword, hashPassword } from '../../utils/crypto.js';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
+import { sessionRepository } from '../../services/database/repositories/session.repository.js';
 import { createApiKeyForUser } from '../../services/auth/api-key.service.js';
 import { createApiKeySchema } from '../auth/auth.schema.js';
 import { createSessionSchema, sessionIdParamSchema } from '../sessions/session.schema.js';
@@ -14,6 +15,7 @@ import {
   verifyDashboardCookie,
   requireDashboardRole,
   getDashboardContext,
+  assertDashboardSessionAccess,
 } from './dashboard.helper.js';
 import { roleLabel } from '../../utils/labels.js';
 
@@ -22,6 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_session_id: 'Session ID tidak valid',
   create_failed: 'Gagal membuat session',
   phone_exists: 'Nomor HP sudah terdaftar pada session lain',
+  session_forbidden: 'Session/nomor ini milik akun lain. Hubungi admin.',
   password_mismatch: 'Konfirmasi password tidak cocok',
   wrong_password: 'Password saat ini salah',
   user_exists: 'Email sudah terdaftar',
@@ -206,16 +209,36 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const { sessionId, phoneNumber } = parsed.data;
 
     try {
+      const activeKey = apiKeyRepository.findActiveByUserId(request.authUser!.sub);
+      const bound = activeKey
+        ? sessionRepository.findByApiKeyId(activeKey.id)
+        : undefined;
+      if (bound && bound.session_id !== sessionId) {
+        return reply.redirect('/dashboard?error=key_session_limit');
+      }
+
       await sessionManager.create(sessionId, {
-        userId: request.authUser?.sub,
+        userId: request.authUser!.sub,
+        apiKeyId: activeKey?.id,
         phoneNumber,
       });
     } catch (err) {
+      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
+        return reply.redirect('/dashboard?error=session_forbidden');
+      }
       if (err instanceof AppError && err.code === ERR.SESSION_EXISTS) {
         if (err.message.includes('sudah terdaftar')) {
           return reply.redirect(`/dashboard?error=phone_exists&phone=${phoneNumber}`);
         }
-        await sessionManager.restart(sessionId);
+        try {
+          assertDashboardSessionAccess(request.authUser!, sessionId);
+          await sessionManager.restart(sessionId);
+        } catch (accessErr) {
+          if (accessErr instanceof AppError && accessErr.code === ERR.FORBIDDEN) {
+            return reply.redirect('/dashboard?error=session_forbidden');
+          }
+          throw accessErr;
+        }
       } else {
         return reply.redirect(`/dashboard?error=create_failed&scan=${sessionId}`);
       }
@@ -227,21 +250,45 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.post('/dashboard/session/:sessionId/reconnect', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    await sessionManager.restart(sessionId);
+    try {
+      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await sessionManager.restart(sessionId);
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
+        return reply.redirect('/dashboard?error=session_forbidden');
+      }
+      throw err;
+    }
     return reply.redirect(`/dashboard?scan=${sessionId}`);
   });
 
   app.post('/dashboard/session/:sessionId/disconnect', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    await sessionManager.disconnect(sessionId);
+    try {
+      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await sessionManager.disconnect(sessionId);
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
+        return reply.redirect('/dashboard?error=session_forbidden');
+      }
+      throw err;
+    }
     return reply.redirect('/dashboard');
   });
 
   app.post('/dashboard/session/:sessionId/delete', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    await sessionManager.deleteSession(sessionId);
+    try {
+      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await sessionManager.deleteSession(sessionId);
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
+        return reply.redirect('/dashboard?error=session_forbidden');
+      }
+      throw err;
+    }
     return reply.redirect('/dashboard');
   });
 
@@ -310,6 +357,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
+    assertDashboardSessionAccess(request.authUser!, sessionId);
 
     return sendSuccess(reply, {
       qr: sessionManager.getQr(sessionId),
@@ -327,10 +375,18 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     };
 
     if (body.sessionId && body.to && body.message) {
-      messageQueue.enqueue(body.sessionId, body.to, {
-        type: 'text',
-        message: body.message,
-      });
+      try {
+        assertDashboardSessionAccess(request.authUser!, body.sessionId);
+        messageQueue.enqueue(body.sessionId, body.to, {
+          type: 'text',
+          message: body.message,
+        });
+      } catch (err) {
+        if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
+          return reply.redirect('/dashboard?error=session_forbidden');
+        }
+        throw err;
+      }
     }
 
     return reply.redirect('/dashboard');

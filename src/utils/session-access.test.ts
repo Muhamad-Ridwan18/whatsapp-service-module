@@ -24,11 +24,11 @@ describe('canApiKeyAccessSession', () => {
     expect(canApiKeyAccessSession(apiKey, sessionOwned)).toBe(true);
   });
 
-  it('allows session with matching user_id', () => {
+  it('denies session with only matching user_id (must be bound to key)', () => {
     expect(canApiKeyAccessSession(apiKey, {
       ...sessionOwned,
       api_key_id: null,
-    })).toBe(true);
+    })).toBe(false);
   });
 
   it('denies session from another account', () => {

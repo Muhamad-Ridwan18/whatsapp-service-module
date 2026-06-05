@@ -23,13 +23,35 @@ export const sessionRepository = {
       .all(userId) as SessionRow[];
   },
 
-  listByApiKeyId(apiKeyId: number): SessionRow[] {
+  /** Session yang terikat langsung ke API key (1 key = 1 session). */
+  findByApiKeyId(apiKeyId: number): SessionRow | undefined {
     return db
       .getDb()
       .prepare(
-        'SELECT * FROM sessions WHERE api_key_id = ? OR user_id = (SELECT user_id FROM api_keys WHERE id = ?) ORDER BY created_at DESC',
+        'SELECT * FROM sessions WHERE api_key_id = ? ORDER BY created_at DESC LIMIT 1',
       )
-      .all(apiKeyId, apiKeyId) as SessionRow[];
+      .get(apiKeyId) as SessionRow | undefined;
+  },
+
+  listByApiKeyId(apiKeyId: number): SessionRow[] {
+    const bound = this.findByApiKeyId(apiKeyId);
+    return bound ? [bound] : [];
+  },
+
+  bindApiKey(sessionId: string, apiKeyId: number): void {
+    db.getDb()
+      .prepare(
+        `UPDATE sessions SET api_key_id = ?, updated_at = datetime('now') WHERE session_id = ?`,
+      )
+      .run(apiKeyId, sessionId);
+  },
+
+  transferApiKeyBindings(fromApiKeyId: number, toApiKeyId: number): void {
+    db.getDb()
+      .prepare(
+        `UPDATE sessions SET api_key_id = ?, updated_at = datetime('now') WHERE api_key_id = ?`,
+      )
+      .run(toApiKeyId, fromApiKeyId);
   },
 
   count(): number {
@@ -82,6 +104,14 @@ export const sessionRepository = {
         `UPDATE sessions SET phone_number = ?, updated_at = datetime('now') WHERE session_id = ?`,
       )
       .run(phoneNumber, sessionId);
+  },
+
+  setOwner(sessionId: string, userId: number): void {
+    db.getDb()
+      .prepare(
+        `UPDATE sessions SET user_id = ?, updated_at = datetime('now') WHERE session_id = ?`,
+      )
+      .run(userId, sessionId);
   },
 
   updateStatus(

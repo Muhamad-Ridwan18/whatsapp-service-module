@@ -3,13 +3,12 @@ import { messageQueue } from '../../services/queue/message-queue.js';
 import type { MessagePayload } from '../../types/index.js';
 import { sendSuccess } from '../../utils/response.js';
 import { apiKeyAuth, requirePermission } from '../../middleware/auth.js';
-import { sendMessageSchema, bulkMessageSchema } from './message.schema.js';
+import { z } from 'zod';
+import { parseSendRequestBody } from './send.helper.js';
+import type { ParsedSendMessage } from './send.helper.js';
 import { assertApiKeySessionAccess } from '../../utils/session-access.js';
-import type { z } from 'zod';
 
-type ParsedMessage = z.infer<typeof sendMessageSchema>;
-
-function toPayload(body: ParsedMessage): MessagePayload {
+function toPayload(body: ParsedSendMessage): MessagePayload {
   return {
     type: body.type,
     message: body.message,
@@ -28,7 +27,7 @@ async function handleSendMessage(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<FastifyReply> {
-  const body = sendMessageSchema.parse(request.body);
+  const body = parseSendRequestBody(request.body, request.apiKey!);
   assertApiKeySessionAccess(request.apiKey!, body.sessionId);
 
   const jobId = messageQueue.enqueue(
@@ -63,7 +62,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     schema: {
       tags: ['Messaging'],
       security: [{ apiKey: [] }],
-      description: 'Alias Fonnte. Field: target, countryCode, message, url, filename, sessionId.',
+      description: 'Alias Fonnte. Cukup target, countryCode, message — session dari API key.',
     },
   }, handleSendMessage);
 
@@ -71,13 +70,16 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     preHandler: sendHandlers,
     schema: { tags: ['Messaging'], security: [{ apiKey: [] }] },
   }, async (request, reply) => {
-    const body = bulkMessageSchema.parse(request.body);
-    for (const msg of body.messages) {
-      assertApiKeySessionAccess(request.apiKey!, msg.sessionId);
-    }
+    const { messages: rawMessages } = z.object({
+      messages: z.array(z.unknown()).min(1).max(100),
+    }).parse(request.body);
+
+    const messages = rawMessages.map((msg) =>
+      parseSendRequestBody(msg, request.apiKey!),
+    );
 
     const jobIds = messageQueue.enqueueBulk(
-      body.messages,
+      messages,
       request.apiKey?.id,
     );
 
