@@ -126,6 +126,23 @@ pm2 logs whatsapp-service
 curl https://wa.yourdomain.com/health
 ```
 
+## PM2 — hindari restart otomatis
+
+`ecosystem.config.js` **tidak** memakai `max_memory_restart` (limit 450M dulu sering restart & putuskan session WhatsApp).
+
+- PM2 restart hanya jika proses **crash**
+- `max_restarts: 3` — batasi restart beruntun cepat
+- `restart_delay: 15s` + exponential backoff
+- Node heap: `NODE_OPTIONS=--max-old-space-size=1024`
+
+Setelah ubah config:
+
+```bash
+pm2 delete whatsapp-service
+pm2 start ecosystem.config.js
+pm2 save
+```
+
 ## Memory Optimization Tips
 
 - Keep `MAX_SESSIONS` low on 1GB VPS (3-5 sessions)

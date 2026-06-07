@@ -52,22 +52,30 @@ class SessionManager {
       return;
     }
 
-    const dirs = fs
+    const authFolders = fs
       .readdirSync(authDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
 
-    const dbSessions = sessionRepository.list().map((s) => s.session_id);
-    const toRestore = [...new Set([...dirs, ...dbSessions])];
+    const dbSessions = sessionRepository.list();
 
-    waLogger.info({ count: toRestore.length }, 'Restoring sessions');
-
-    for (const sessionId of toRestore) {
-      if (!sessionRepository.findBySessionId(sessionId)) {
-        sessionRepository.create({ session_id: sessionId, status: 'initializing' });
+    for (const folder of authFolders) {
+      if (!sessionRepository.findBySessionId(folder)) {
+        const orphanPath = path.join(authDir, folder);
+        waLogger.warn({ sessionId: folder }, 'Folder auth yatim — dibersihkan (session sudah dihapus)');
+        try {
+          fs.rmSync(orphanPath, { recursive: true, force: true });
+        } catch (err) {
+          waLogger.error({ sessionId: folder, err }, 'Gagal hapus folder auth yatim');
+        }
       }
-      await this.connect(sessionId).catch((err) => {
-        waLogger.error({ sessionId, err }, 'Failed to restore session');
+    }
+
+    waLogger.info({ count: dbSessions.length }, 'Restoring sessions from database');
+
+    for (const session of dbSessions) {
+      await this.connect(session.session_id).catch((err) => {
+        waLogger.error({ sessionId: session.session_id, err }, 'Failed to restore session');
       });
     }
   }
@@ -322,7 +330,8 @@ class SessionManager {
 
           if (statusCode === DisconnectReason.loggedOut) {
             this.setStatus(sessionId, 'disconnected');
-            waLogger.warn({ sessionId, statusCode }, 'Session logged out');
+            waLogger.warn({ sessionId, statusCode }, 'Session logged out dari HP — hapus creds');
+            this.removeAuthFiles(sessionId);
             return;
           }
 
@@ -363,13 +372,17 @@ class SessionManager {
           if (inst!.reconnectAttempts < config.whatsapp.maxReconnectAttempts) {
             inst!.reconnectAttempts++;
             this.setStatus(sessionId, 'reconnecting');
+            const backoff = Math.min(
+              config.whatsapp.reconnectIntervalMs * inst!.reconnectAttempts,
+              60000,
+            );
             waLogger.warn(
-              { sessionId, statusCode, attempt: inst!.reconnectAttempts },
+              { sessionId, statusCode, attempt: inst!.reconnectAttempts, backoffMs: backoff },
               'Reconnecting session',
             );
             setTimeout(() => {
               void this.connect(sessionId);
-            }, config.whatsapp.reconnectIntervalMs);
+            }, backoff);
             return;
           }
 
@@ -602,15 +615,36 @@ class SessionManager {
     await this.connect(sessionId);
   }
 
+  private removeAuthFiles(sessionId: string): void {
+    const authPath = this.getAuthPath(sessionId);
+    if (!fs.existsSync(authPath)) return;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        return;
+      } catch (err) {
+        waLogger.warn({ sessionId, attempt, err }, 'Retry hapus folder auth');
+      }
+    }
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
-    await this.disconnect(sessionId);
+    const inst = this.sessions.get(sessionId);
+    if (inst?.socket) {
+      try {
+        inst.socket.end(undefined);
+      } catch {
+        /* ignore */
+      }
+      inst.socket = null;
+    }
+
     this.sessions.delete(sessionId);
     sessionRepository.delete(sessionId);
+    this.removeAuthFiles(sessionId);
 
-    const authPath = this.getAuthPath(sessionId);
-    if (fs.existsSync(authPath)) {
-      fs.rmSync(authPath, { recursive: true, force: true });
-    }
+    waLogger.info({ sessionId }, 'Session dihapus (DB + folder auth)');
   }
 
   listSessions(): Record<string, SessionStatus> {
