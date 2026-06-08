@@ -4,7 +4,11 @@ import { dbNow } from '../sql.js';
 
 export const userRepository = {
   async findByEmail(email: string): Promise<UserRow | undefined> {
-    return db.get<UserRow>('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+    const normalized = email.trim().toLowerCase();
+    return db.get<UserRow>(
+      'SELECT * FROM users WHERE LOWER(TRIM(email)) = ? AND is_active = 1',
+      [normalized],
+    );
   },
 
   async findById(id: number): Promise<UserRow | undefined> {

@@ -7,6 +7,16 @@ import { logger } from './services/logger/index.js';
 
 async function start(): Promise<void> {
   await db.connect();
+  logger.info(
+    {
+      dbDriver: config.database.driver,
+      dbTarget:
+        config.database.driver === 'mysql'
+          ? `${config.database.mysql.host}/${config.database.mysql.database}`
+          : config.database.path,
+    },
+    'Database configuration',
+  );
   await bootstrap();
 
   const app = await buildApp();

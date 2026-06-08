@@ -15,7 +15,7 @@ export async function verifyPassword(
   password: string,
   hash: string,
 ): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  return bcrypt.compare(password, String(hash).trim());
 }
 
 function randomApiKeySegment(length: number): string {

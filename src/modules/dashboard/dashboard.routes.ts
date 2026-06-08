@@ -19,6 +19,7 @@ import {
   assertDashboardSessionAccess,
 } from './dashboard.helper.js';
 import { roleLabel } from '../../utils/labels.js';
+import { authLogger } from '../../services/logger/index.js';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: 'Input tidak valid',
@@ -40,9 +41,19 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/login', async (request, reply) => {
     const body = request.body as { email?: string; password?: string };
-    const user = await userRepository.findByEmail(body.email ?? '');
+    const email = (body.email ?? '').trim().toLowerCase();
+    const password = body.password ?? '';
+    const user = await userRepository.findByEmail(email);
 
-    if (!user || !(await verifyPassword(body.password ?? '', user.password_hash))) {
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      authLogger.warn(
+        {
+          email,
+          userFound: !!user,
+          dbDriver: config.database.driver,
+        },
+        'Dashboard login failed',
+      );
       return reply.view('login.ejs', { title: 'Login', error: 'Invalid credentials' });
     }
 

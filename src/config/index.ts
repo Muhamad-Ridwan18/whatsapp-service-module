@@ -1,7 +1,23 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 
-const root = process.cwd();
+/** Cari folder yang berisi package.json (tahan PM2 cwd aneh). */
+function resolveProjectRoot(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
+const root = resolveProjectRoot();
+dotenv.config({ path: path.join(root, '.env') });
 
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
@@ -77,9 +93,9 @@ export const config = {
   },
 
   admin: {
-    email: process.env.ADMIN_EMAIL ?? 'admin@localhost',
-    password: process.env.ADMIN_PASSWORD ?? 'changeme123',
-    name: process.env.ADMIN_NAME ?? 'Super Admin',
+    email: (process.env.ADMIN_EMAIL ?? 'admin@localhost').trim(),
+    password: (process.env.ADMIN_PASSWORD ?? 'changeme123').trim(),
+    name: (process.env.ADMIN_NAME ?? 'Super Admin').trim(),
   },
 
   cors: {
