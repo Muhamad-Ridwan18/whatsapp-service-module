@@ -47,6 +47,42 @@ export function hashApiKey(key: string): string {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
+const API_KEY_CIPHER = 'aes-256-gcm';
+
+function apiKeyCipherKey(): Buffer {
+  return crypto.createHash('sha256').update(`wsm:api-key:${config.jwt.secret}`).digest();
+}
+
+/** Simpan key terenkripsi agar bisa ditampilkan lagi di dashboard. */
+export function encryptApiKey(plaintext: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(API_KEY_CIPHER, apiKeyCipherKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`;
+}
+
+export function decryptApiKey(payload: string | null | undefined): string | null {
+  if (!payload) return null;
+  try {
+    const [ivB64, tagB64, dataB64] = payload.split(':');
+    if (!ivB64 || !tagB64 || !dataB64) return null;
+    const decipher = crypto.createDecipheriv(
+      API_KEY_CIPHER,
+      apiKeyCipherKey(),
+      Buffer.from(ivB64, 'base64'),
+    );
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(dataB64, 'base64')),
+      decipher.final(),
+    ]);
+    return decrypted.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
 export function generateWebhookSecret(): string {
   return crypto.randomBytes(24).toString('hex');
 }

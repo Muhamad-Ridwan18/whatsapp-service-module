@@ -58,6 +58,7 @@ export const apiKeyRepository = {
     user_id: number;
     key_hash: string;
     key_prefix: string;
+    key_encrypted?: string | null;
     name: string;
     permissions?: string;
     webhook_url?: string | null;
@@ -65,12 +66,13 @@ export const apiKeyRepository = {
     ip_whitelist?: string | null;
   }): Promise<number> {
     const result = await db.run(
-      `INSERT INTO api_keys (user_id, key_hash, key_prefix, name, permissions, webhook_url, webhook_events, ip_whitelist)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO api_keys (user_id, key_hash, key_prefix, key_encrypted, name, permissions, webhook_url, webhook_events, ip_whitelist)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         data.user_id,
         data.key_hash,
         data.key_prefix,
+        data.key_encrypted ?? null,
         data.name,
         data.permissions ?? '["message:send","session:read"]',
         data.webhook_url ?? null,

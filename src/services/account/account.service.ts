@@ -3,7 +3,7 @@ import { sessionRepository } from '../database/repositories/session.repository.j
 import { userRepository } from '../database/repositories/user.repository.js';
 import { sessionManager } from '../whatsapp/session-manager.js';
 import { createApiKeyForUser } from '../auth/api-key.service.js';
-import { hashPassword, generateApiKey } from '../../utils/crypto.js';
+import { encryptApiKey, hashPassword, generateApiKey } from '../../utils/crypto.js';
 import { normalizePhoneDigits } from '../../utils/phone.js';
 import { sessionIdFromPhone } from '../../utils/session-id.js';
 import { AppError, ERR } from '../../utils/errors.js';
@@ -162,6 +162,7 @@ export async function rotateApiKey(userId: number): Promise<{ apiKey: string }> 
     user_id: userId,
     key_hash: hash,
     key_prefix: prefix,
+    key_encrypted: encryptApiKey(key),
     name: `WA ${session.phone_number ?? session.session_id}`,
     permissions: JSON.stringify(['message:send', 'session:read', 'session:manage']),
   });

@@ -15,25 +15,6 @@
 
     <%- include('partials/alerts') %>
 
-    <% if (newApiKey) { %>
-    <div class="card-highlight">
-      <div class="card-header">
-        <p class="card-title text-brand-light">API Key baru</p>
-        <p class="card-desc">Simpan sekarang — tidak ditampilkan lagi. Key lama otomatis dinonaktifkan.</p>
-      </div>
-      <div class="card-body space-y-3">
-        <p class="hint font-mono">WHATSAPP_API_KEY=</p>
-        <div class="flex flex-col sm:flex-row gap-2">
-          <code id="newApiKeyValue" data-copy-text="<%= newApiKey %>" class="flex-1 bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all select-all"><%= newApiKey %></code>
-          <button type="button" class="btn-brand btn-copy shrink-0" data-copy-target="newApiKeyValue" data-copy-label="Salin Key" title="Salin API key">
-            <span class="btn-copy-icon" aria-hidden="true">📋</span> Salin Key
-          </button>
-        </div>
-        <p class="hint">Simpan key ini sekarang. Jika tombol gagal, blok teks di atas lalu Ctrl+C.</p>
-      </div>
-    </div>
-    <% } %>
-
     <!-- Flow progress -->
     <div class="flow-progress">
       <div class="flow-step <%= account.phone ? 'flow-step--done' : '' %>">
@@ -76,8 +57,11 @@
       </div>
       <div class="account-bundle-item">
         <p class="account-bundle-label">API Key</p>
-        <p class="account-bundle-value font-mono text-xs">
-          <% if (account.apiKeyPrefix) { %>
+        <p class="account-bundle-value font-mono text-xs break-all">
+          <% if (account.apiKey) { %>
+            <%= account.apiKey %>
+            <% if (account.apiKeyActive) { %><span class="badge-success ml-2">Aktif</span><% } %>
+          <% } else if (account.apiKeyPrefix) { %>
             <%= account.apiKeyPrefix %>••••••
             <% if (account.apiKeyActive) { %><span class="badge-success ml-2">Aktif</span><% } %>
           <% } else { %>
@@ -207,24 +191,23 @@
           </div>
         </div>
         <div class="card-body space-y-4">
-          <% if (newApiKey) { %>
-          <div class="rounded-lg border border-brand/30 bg-brand/5 p-4 space-y-3">
-            <p class="text-sm text-brand-light font-medium">Key baru — salin sekarang</p>
+          <% if (account.apiKey) { %>
+          <div>
+            <p class="label mb-2">Key aktif</p>
             <div class="flex flex-col sm:flex-row gap-2">
-              <code id="apiKeyTabValue" data-copy-text="<%= newApiKey %>" class="flex-1 bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all select-all"><%= newApiKey %></code>
+              <code id="apiKeyTabValue" data-copy-text="<%= account.apiKey %>" class="flex-1 bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all select-all"><%= account.apiKey %></code>
               <button type="button" class="btn-brand btn-copy shrink-0" data-copy-target="apiKeyTabValue" data-copy-label="Salin Key" title="Salin API key">
                 <span class="btn-copy-icon" aria-hidden="true">📋</span> Salin Key
               </button>
             </div>
+            <p class="hint mt-2">Key bisa dilihat dan disalin kapan saja dari dashboard.</p>
           </div>
           <% } else if (account.apiKeyPrefix) { %>
-          <div class="info-row border-0">
-            <span class="info-row-label">Key aktif</span>
-            <span class="info-row-value font-mono text-xs"><%= account.apiKeyPrefix %>••••••</span>
+          <div class="alert alert-error">
+            Key lama belum bisa ditampilkan. Klik <strong>Regenerasi API key</strong> sekali untuk menyimpan key yang bisa dilihat ulang.
           </div>
-          <p class="hint">Key lengkap hanya ditampilkan saat generate/regenerasi. Klik <strong>Regenerasi API key</strong> di bawah untuk mendapatkan key baru + tombol salin.</p>
           <% } else { %>
-          <p class="text-sm text-txt-muted">API key dibuat otomatis saat daftar. Jika hilang, generate ulang di bawah.</p>
+          <p class="text-sm text-txt-muted">API key dibuat otomatis saat daftar. Jika belum ada, generate di bawah.</p>
           <% } %>
 
           <form method="POST" action="/dashboard/api-key/rotate" class="space-y-4 max-w-lg" data-confirm="Generate key baru? Key lama akan dinonaktifkan.">
@@ -266,7 +249,7 @@
           </div>
         </div>
         <div class="card-body space-y-4">
-          <% const envApiKey = newApiKey || (account.apiKeyPrefix ? account.apiKeyPrefix + '••••••' : 'YOUR_API_KEY'); %>
+          <% const envApiKey = account.apiKey || 'YOUR_API_KEY'; %>
           <% const envCopyText = 'WHATSAPP_SERVICE_URL=' + (typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:3000') + '\nWHATSAPP_API_KEY=' + envApiKey; %>
           <pre class="code-block select-all" id="envSnippet" data-copy-text="<%= envCopyText %>">WHATSAPP_SERVICE_URL=<%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:3000' %>
 WHATSAPP_API_KEY=<span class="text-brand"><%= envApiKey %></span></pre>

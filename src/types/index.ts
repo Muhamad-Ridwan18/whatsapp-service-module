@@ -57,6 +57,7 @@ export interface ApiKeyRow {
   user_id: number;
   key_hash: string;
   key_prefix: string;
+  key_encrypted: string | null;
   name: string;
   permissions: string;
   webhook_url: string | null;

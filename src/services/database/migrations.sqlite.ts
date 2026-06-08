@@ -160,4 +160,10 @@ export const sqliteMigrations: { version: number; sql: string }[] = [
         ON sessions(phone_number) WHERE phone_number IS NOT NULL;
     `,
   },
+  {
+    version: 5,
+    sql: `
+      ALTER TABLE api_keys ADD COLUMN key_encrypted TEXT;
+    `,
+  },
 ];

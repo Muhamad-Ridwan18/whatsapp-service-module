@@ -8,6 +8,7 @@ import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import type { JwtPayload, UserRole } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
+import { decryptApiKey } from '../../utils/crypto.js';
 import { auditActionLabel, formatLogTime, sessionEventLabel, sessionStatusLabel } from '../../utils/labels.js';
 
 export async function verifyDashboardCookie(
@@ -78,6 +79,7 @@ export async function getDashboardContext(
   const bundle = await getAccountBundle(authUser.sub);
   const session = bundle.session;
   const apiKey = bundle.apiKey;
+  const apiKeyPlain = apiKey ? decryptApiKey(apiKey.key_encrypted) : null;
   const sessionId = session?.session_id ?? null;
   const liveStatus = sessionId ? sessionManager.getStatus(sessionId) : 'disconnected';
 
@@ -94,12 +96,12 @@ export async function getDashboardContext(
       sessionId,
       sessionStatus: liveStatus,
       sessionStatusLabel: sessionStatusLabel(liveStatus).label,
+      apiKey: apiKeyPlain,
       apiKeyPrefix: apiKey?.key_prefix ?? null,
       apiKeyActive: !!apiKey?.is_active,
       webhookUrl: apiKey?.webhook_url ?? null,
     },
     scanSession: (extras?.scanSession as string | null | undefined) ?? sessionId,
-    newApiKey: null,
     errorMessage: null,
     successMessage: extras?.successMessage ?? null,
     stats: {

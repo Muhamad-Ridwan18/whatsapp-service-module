@@ -164,4 +164,10 @@ export const mysqlMigrations: { version: number; sql: string }[] = [
       CREATE UNIQUE INDEX idx_sessions_phone_unique ON sessions (phone_number);
     `,
   },
+  {
+    version: 5,
+    sql: `
+      ALTER TABLE api_keys ADD COLUMN key_encrypted TEXT NULL;
+    `,
+  },
 ];

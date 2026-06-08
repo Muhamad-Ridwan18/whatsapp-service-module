@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateApiKey, hashApiKey } from './crypto.js';
+import { decryptApiKey, encryptApiKey, generateApiKey, hashApiKey } from './crypto.js';
 
 describe('generateApiKey', () => {
   it('generates token with max 15 characters', () => {
@@ -16,5 +16,18 @@ describe('generateApiKey', () => {
   it('produces verifiable hash', () => {
     const { key, hash } = generateApiKey();
     expect(hashApiKey(key)).toBe(hash);
+  });
+});
+
+describe('encryptApiKey', () => {
+  it('round-trips api key storage', () => {
+    const { key } = generateApiKey();
+    const encrypted = encryptApiKey(key);
+    expect(decryptApiKey(encrypted)).toBe(key);
+  });
+
+  it('returns null for invalid payload', () => {
+    expect(decryptApiKey('invalid')).toBeNull();
+    expect(decryptApiKey(null)).toBeNull();
   });
 });

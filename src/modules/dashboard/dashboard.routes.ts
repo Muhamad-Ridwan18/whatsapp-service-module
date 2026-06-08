@@ -182,6 +182,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const successMap: Record<string, string> = {
       registered: 'Akun berhasil dibuat. Scan QR untuk menghubungkan WhatsApp.',
       webhook_saved: 'Webhook URL berhasil disimpan.',
+      api_key_rotated: 'API key baru dibuat. Key lama otomatis dinonaktifkan.',
       message_queued: query.job
         ? `Pesan masuk antrian (job: ${query.job}). Estimasi kirim 3–8 detik.`
         : 'Pesan masuk antrian. Estimasi kirim 3–8 detik.',
@@ -356,7 +357,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const body = request.body as { webhook_url?: string };
-    const { apiKey } = await rotateApiKey(request.authUser!.sub);
+    await rotateApiKey(request.authUser!.sub);
 
     if (body.webhook_url !== undefined) {
       const bundle = await getAccountBundle(request.authUser!.sub);
@@ -365,15 +366,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const ctx = await getDashboardContext(request.authUser!, {
-      title: 'Dashboard',
-      activePage: 'dashboard',
-      activeTab: 'apikeys',
-      newApiKey: apiKey,
-      successMessage: 'API key baru dibuat. Key lama otomatis dinonaktifkan.',
-    });
-
-    return reply.view('dashboard.ejs', ctx);
+    return reply.redirect('/dashboard?tab=apikeys&success=api_key_rotated');
   });
 
   app.post('/dashboard/webhook', async (request, reply) => {

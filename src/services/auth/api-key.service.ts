@@ -1,6 +1,6 @@
 import { apiKeyRepository } from '../database/repositories/api-key.repository.js';
 import { sessionRepository } from '../database/repositories/session.repository.js';
-import { generateApiKey } from '../../utils/crypto.js';
+import { encryptApiKey, generateApiKey } from '../../utils/crypto.js';
 import { AppError, ERR } from '../../utils/errors.js';
 
 export interface CreateApiKeyInput {
@@ -30,6 +30,7 @@ export async function createApiKeyForUser(userId: number, input: CreateApiKeyInp
     user_id: userId,
     key_hash: hash,
     key_prefix: prefix,
+    key_encrypted: encryptApiKey(key),
     name: input.name,
     permissions: input.permissions
       ? JSON.stringify(input.permissions)
