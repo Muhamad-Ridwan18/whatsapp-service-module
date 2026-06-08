@@ -263,21 +263,21 @@
     return ok;
   }
 
-  function copyToClipboard(text, btn, okText, defaultText) {
+  function copyToClipboard(text, btn, okText, defaultHtml) {
     if (!text) {
       btn.textContent = 'Tidak ada teks';
-      setTimeout(function () { btn.textContent = defaultText; }, 2000);
+      setTimeout(function () { btn.innerHTML = defaultHtml; }, 2000);
       return;
     }
 
     function onSuccess() {
       btn.textContent = okText;
-      setTimeout(function () { btn.textContent = defaultText; }, 2000);
+      setTimeout(function () { btn.innerHTML = defaultHtml; }, 2000);
     }
 
     function onFail() {
       btn.textContent = 'Gagal — salin manual';
-      setTimeout(function () { btn.textContent = defaultText; }, 2500);
+      setTimeout(function () { btn.innerHTML = defaultHtml; }, 2500);
     }
 
     if (navigator.clipboard && window.isSecureContext) {
@@ -290,21 +290,24 @@
     fallbackCopyText(text) ? onSuccess() : onFail();
   }
 
-  var copyBtn = document.getElementById('btnCopyKey');
-  var keyVal = document.getElementById('newApiKeyValue');
-  if (copyBtn && keyVal) {
-    copyBtn.addEventListener('click', function () {
-      var text = keyVal.getAttribute('data-copy-text') || keyVal.textContent || '';
-      copyToClipboard(text.trim(), copyBtn, 'Tersalin!', 'Salin Key');
-    });
+  function resolveCopyText(btn) {
+    var direct = btn.getAttribute('data-copy-text');
+    if (direct) return direct;
+
+    var targetId = btn.getAttribute('data-copy-target');
+    if (!targetId) return '';
+
+    var el = document.getElementById(targetId);
+    if (!el) return '';
+
+    return el.getAttribute('data-copy-text') || el.textContent || '';
   }
 
-  var copyEnvBtn = document.getElementById('btnCopyEnv');
-  var envSnippet = document.getElementById('envSnippet');
-  if (copyEnvBtn && envSnippet) {
-    copyEnvBtn.addEventListener('click', function () {
-      var text = envSnippet.getAttribute('data-copy-text') || envSnippet.textContent || '';
-      copyToClipboard(text.trim(), copyEnvBtn, 'Tersalin!', 'Salin konfigurasi');
+  document.querySelectorAll('.btn-copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var defaultHtml = btn.innerHTML;
+      var text = resolveCopyText(btn);
+      copyToClipboard(text.trim(), btn, '✓ Tersalin!', defaultHtml);
     });
-  }
+  });
 })();

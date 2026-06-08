@@ -223,6 +223,10 @@
   }
 
   /* ===== BUTTONS ===== */
+  .btn-copy-icon {
+    @apply mr-1.5 inline-block;
+  }
+
   .btn-brand {
     @apply inline-flex items-center justify-center gap-2 font-semibold text-sm rounded-lg sm:rounded-xl transition-all
       bg-brand hover:bg-brand-dark text-white px-4 py-2.5 sm:px-5 sm:py-3
