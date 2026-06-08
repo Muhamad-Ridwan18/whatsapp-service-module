@@ -1,5 +1,6 @@
 import type { SessionEventRow } from '../../../types/index.js';
 import { db } from '../index.js';
+import { clampLimit } from '../sql.js';
 
 export const sessionEventRepository = {
   async log(data: {
@@ -23,15 +24,15 @@ export const sessionEventRepository = {
   },
 
   async recent(sessionId?: string, limit = 100): Promise<SessionEventRow[]> {
+    const lim = clampLimit(limit);
     if (sessionId) {
       return db.all<SessionEventRow>(
-        'SELECT * FROM session_events WHERE session_id = ? ORDER BY created_at DESC LIMIT ?',
-        [sessionId, limit],
+        `SELECT * FROM session_events WHERE session_id = ? ORDER BY created_at DESC LIMIT ${lim}`,
+        [sessionId],
       );
     }
     return db.all<SessionEventRow>(
-      'SELECT * FROM session_events ORDER BY created_at DESC LIMIT ?',
-      [limit],
+      `SELECT * FROM session_events ORDER BY created_at DESC LIMIT ${lim}`,
     );
   },
 

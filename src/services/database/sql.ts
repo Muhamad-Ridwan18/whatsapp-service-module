@@ -9,3 +9,8 @@ export function sqlTodayFilter(column: string): string {
     ? `DATE(${column}) = CURDATE()`
     : `date(${column}) = date('now')`;
 }
+
+/** MySQL prepared statement tidak mendukung LIMIT ? — inline integer aman. */
+export function clampLimit(limit: number, max = 500): number {
+  return Math.min(Math.max(Math.floor(limit), 1), max);
+}

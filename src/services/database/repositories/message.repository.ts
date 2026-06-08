@@ -1,6 +1,6 @@
 import type { MessageRow, MessageType } from '../../../types/index.js';
 import { db } from '../index.js';
-import { sqlTodayFilter } from '../sql.js';
+import { clampLimit, sqlTodayFilter } from '../sql.js';
 
 export const messageRepository = {
   async create(data: {
@@ -59,9 +59,10 @@ export const messageRepository = {
   },
 
   async recent(limit = 50): Promise<MessageRow[]> {
-    return db.all<MessageRow>('SELECT * FROM messages ORDER BY created_at DESC LIMIT ?', [
-      limit,
-    ]);
+    const lim = clampLimit(limit);
+    return db.all<MessageRow>(
+      `SELECT * FROM messages ORDER BY created_at DESC LIMIT ${lim}`,
+    );
   },
 
   async countToday(): Promise<number> {
@@ -72,9 +73,9 @@ export const messageRepository = {
   },
 
   async recentLogs(limit = 100) {
+    const lim = clampLimit(limit);
     return db.all(
-      'SELECT * FROM message_logs ORDER BY created_at DESC LIMIT ?',
-      [limit],
+      `SELECT * FROM message_logs ORDER BY created_at DESC LIMIT ${lim}`,
     );
   },
 

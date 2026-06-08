@@ -1,4 +1,5 @@
 import { db } from '../index.js';
+import { clampLimit } from '../sql.js';
 
 export const auditRepository = {
   async log(data: {
@@ -26,7 +27,8 @@ export const auditRepository = {
   },
 
   async recent(limit = 100) {
-    return db.all('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?', [limit]);
+    const lim = clampLimit(limit);
+    return db.all(`SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ${lim}`);
   },
 
   async recentSafe(limit = 100) {
