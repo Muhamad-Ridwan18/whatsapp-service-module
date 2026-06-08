@@ -1,8 +1,10 @@
 import os from 'node:os';
 import type { FastifyInstance } from 'fastify';
+import { config } from '../../config/index.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionRepository } from '../../services/database/repositories/session.repository.js';
+import { userRepository } from '../../services/database/repositories/user.repository.js';
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/health', {
@@ -29,6 +31,14 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
         total: await sessionRepository.count(),
         connected: sessionManager.getConnectedCount(),
         queue: messageQueue.getStats(),
+      },
+      database: {
+        driver: config.database.driver,
+        target:
+          config.database.driver === 'mysql'
+            ? `${config.database.mysql.host}/${config.database.mysql.database}`
+            : config.database.path,
+        users: await userRepository.count(),
       },
     });
   });

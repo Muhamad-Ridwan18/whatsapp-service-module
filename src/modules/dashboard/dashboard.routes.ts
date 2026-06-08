@@ -63,14 +63,20 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       role: user.role,
     });
 
+    const forwardedProto = request.headers['x-forwarded-proto'];
+    const isSecure =
+      config.isProd &&
+      (forwardedProto === 'https' || request.protocol === 'https');
+
     reply.setCookie('token', token, {
       path: '/',
       httpOnly: true,
-      secure: config.isProd,
+      secure: isSecure,
       sameSite: 'lax',
       maxAge: 86400,
     });
 
+    authLogger.info({ email, dbDriver: config.database.driver }, 'Dashboard login OK');
     return reply.redirect('/dashboard');
   });
 
