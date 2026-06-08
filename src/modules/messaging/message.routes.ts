@@ -8,6 +8,8 @@ import { parseSendRequestBody } from './send.helper.js';
 import type { ParsedSendMessage } from './send.helper.js';
 import { normalizeUrlFields, readSendRequest } from './read-send-request.js';
 import { assertApiKeySessionAccess } from '../../utils/session-access.js';
+import { sessionManager } from '../../services/whatsapp/session-manager.js';
+import { AppError, ERR } from '../../utils/errors.js';
 
 function toPayload(body: ParsedSendMessage): MessagePayload {
   return {
@@ -37,6 +39,14 @@ async function handleSendMessage(
   );
 
   await assertApiKeySessionAccess(request.apiKey!, body.sessionId);
+
+  if (sessionManager.getStatus(body.sessionId) !== 'connected') {
+    throw new AppError(
+      'Session WhatsApp belum terhubung. Buka dashboard, scan QR, tunggu status Terhubung.',
+      ERR.SESSION_NOT_CONNECTED,
+      400,
+    );
+  }
 
   const jobId = messageQueue.enqueue(
     body.sessionId,

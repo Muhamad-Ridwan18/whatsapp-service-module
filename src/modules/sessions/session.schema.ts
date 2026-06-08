@@ -22,12 +22,6 @@ export const createSessionSchema = z
       .max(5)
       .regex(/^[+0-9]+$/, 'Format countryCode tidak valid')
       .optional(),
-    sessionId: z
-      .string()
-      .min(2)
-      .max(50)
-      .regex(/^[a-zA-Z0-9_-]+$/, 'Session ID: huruf, angka, dash, underscore')
-      .optional(),
   })
   .refine(
     (data) => !!data.phoneNumber?.trim() || !!data.target?.trim(),
@@ -42,7 +36,7 @@ export const createSessionSchema = z
 
     return {
       phoneNumber,
-      sessionId: data.sessionId ?? sessionIdFromPhone(phoneNumber),
+      sessionId: sessionIdFromPhone(phoneNumber),
     };
   });
 

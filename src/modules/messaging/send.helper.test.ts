@@ -2,14 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ApiKeyRow, SessionRow } from '../../types/index.js';
 
 const findByApiKeyId = vi.fn();
-const listByUserId = vi.fn();
-const bindApiKey = vi.fn();
 
 vi.mock('../../services/database/repositories/session.repository.js', () => ({
   sessionRepository: {
     findByApiKeyId,
-    listByUserId,
-    bindApiKey,
   },
 }));
 
@@ -27,14 +23,9 @@ describe('resolveSessionForApiKey', () => {
     await expect(resolveSessionForApiKey(apiKey)).resolves.toBe('wa-628111');
   });
 
-  it('auto-binds single unbound user session', async () => {
+  it('rejects when no session bound', async () => {
     findByApiKeyId.mockResolvedValue(undefined);
-    listByUserId.mockResolvedValue([
-      { session_id: 'wa-628222', api_key_id: null },
-    ] as SessionRow[]);
-
-    await expect(resolveSessionForApiKey(apiKey)).resolves.toBe('wa-628222');
-    expect(bindApiKey).toHaveBeenCalledWith('wa-628222', 10);
+    await expect(resolveSessionForApiKey(apiKey)).rejects.toThrow('Session belum ada');
   });
 });
 
@@ -55,14 +46,5 @@ describe('parseSendRequestBody', () => {
     );
     expect(result.sessionId).toBe('wa-628111');
     expect(result.to).toBe('628123456789');
-  });
-
-  it('rejects sessionId that does not match API key', async () => {
-    await expect(
-      parseSendRequestBody(
-        { sessionId: 'wa-other', target: '08111', countryCode: '62', message: 'x' },
-        apiKey,
-      ),
-    ).rejects.toThrow('sessionId tidak cocok');
   });
 });

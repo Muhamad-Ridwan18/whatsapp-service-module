@@ -9,26 +9,32 @@
       <div class="text-center mb-8">
         <div class="sidebar-brand-icon w-14 h-14 text-xl mx-auto mb-5">W</div>
         <h1 class="text-2xl font-bold tracking-tight">Selamat datang</h1>
-        <p class="text-sm text-txt-secondary mt-2">Masuk ke panel WhatsApp Service Module</p>
+        <p class="text-sm text-txt-secondary mt-2">Masuk dengan nomor WhatsApp Anda</p>
       </div>
 
       <% if (typeof error !== 'undefined' && error) { %>
-        <div class="alert alert-error mb-6">Email atau password salah.</div>
+        <div class="alert alert-error mb-6"><%= error %></div>
       <% } %>
 
       <form method="POST" action="/login" class="space-y-5">
         <div>
-          <label class="label">Email</label>
-          <input type="email" name="email" required class="input" placeholder="admin@localhost" autocomplete="email">
+          <label class="label">Nomor WhatsApp</label>
+          <input type="tel" name="phone" required class="input" placeholder="628123456789" autocomplete="tel">
+          <p class="hint">Format internasional tanpa + (contoh: 628123456789)</p>
         </div>
         <div>
           <label class="label">Password</label>
           <input type="password" name="password" required class="input" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <button type="submit" class="btn-brand w-full">Masuk ke Dashboard</button>
+        <button type="submit" class="btn-brand w-full">Masuk</button>
       </form>
 
-      <p class="text-center text-xs text-txt-muted mt-8">
+      <p class="text-center text-sm text-txt-muted mt-6">
+        Belum punya akun?
+        <a href="/register" class="text-brand hover:text-brand-light transition-colors">Daftar sekarang</a>
+      </p>
+
+      <p class="text-center text-xs text-txt-muted mt-4">
         <a href="/docs" class="text-brand hover:text-brand-light transition-colors">Dokumentasi API →</a>
       </p>
     </div>

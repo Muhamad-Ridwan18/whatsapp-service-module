@@ -1,5 +1,6 @@
-<% const initials = (currentUser?.email || 'A').charAt(0).toUpperCase(); %>
-<% const name = (currentUser?.email || '').split('@')[0]; %>
+<% const displayName = currentUser?.name || currentUser?.phone || (currentUser?.email || '').split('@')[0]; %>
+<% const initials = (displayName || 'A').charAt(0).toUpperCase(); %>
+<% const subLabel = currentUser?.phone || currentUser?.email || ''; %>
 
 <div class="app-shell">
   <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
@@ -27,8 +28,8 @@
       <div class="flex items-center gap-3 px-1 mb-2">
         <span class="sidebar-avatar"><%= initials %></span>
         <div class="min-w-0">
-          <p class="text-sm font-medium truncate"><%= name %></p>
-          <p class="text-[10px] text-txt-muted truncate"><%= currentUser?.email %></p>
+          <p class="text-sm font-medium truncate"><%= displayName %></p>
+          <p class="text-[10px] text-txt-muted truncate"><%= subLabel %></p>
         </div>
       </div>
       <a href="/logout" class="sidebar-link text-txt-muted hover:text-red-400 text-xs">Keluar</a>

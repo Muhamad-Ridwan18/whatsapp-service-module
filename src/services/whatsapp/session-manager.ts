@@ -13,7 +13,7 @@ import QRCode from 'qrcode';
 import { config } from '../../config/index.js';
 import type { MessagePayload, SessionStatus } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import { formatDisplayPhone } from '../../utils/phone.js';
+import { formatDisplayPhone, normalizePhoneDigits } from '../../utils/phone.js';
 import { sessionRepository } from '../database/repositories/session.repository.js';
 import { sessionEventRepository } from '../database/repositories/session-event.repository.js';
 import { messageRepository } from '../database/repositories/message.repository.js';
@@ -122,6 +122,17 @@ class SessionManager {
     options?: { apiKeyId?: number; userId?: number; phoneNumber?: string },
   ): Promise<void> {
     const phoneNumber = options?.phoneNumber;
+
+    if (options?.userId) {
+      const byUser = await sessionRepository.findByUserId(options.userId);
+      if (byUser && byUser.session_id !== sessionId) {
+        throw new AppError(
+          'Satu akun hanya boleh punya satu session WhatsApp',
+          ERR.SESSION_LIMIT,
+          403,
+        );
+      }
+    }
 
     if (phoneNumber) {
       const byPhone = await sessionRepository.findByPhoneNumber(phoneNumber);
@@ -321,6 +332,29 @@ class SessionManager {
           inst!.qrBase64 = null;
           const user = socket.user;
           const phone = user?.id ? formatDisplayPhone(user.id) : undefined;
+
+          const row = await sessionRepository.findBySessionId(sessionId);
+          if (row?.phone_number && phone) {
+            const registered = normalizePhoneDigits(row.phone_number);
+            const scanned = normalizePhoneDigits(phone);
+            if (registered !== scanned) {
+              waLogger.warn(
+                { sessionId, registered, scanned },
+                'Nomor yang discan tidak cocok dengan nomor terdaftar',
+              );
+              this.setStatus(sessionId, 'failed', undefined, {
+                reason: 'Nomor WhatsApp tidak cocok dengan akun terdaftar',
+              });
+              try {
+                await socket.logout();
+              } catch {
+                /* ignore */
+              }
+              this.removeAuthFiles(sessionId);
+              return;
+            }
+          }
+
           this.setStatus(sessionId, 'connected', {
             phone_number: phone,
             display_name: user?.name ?? undefined,

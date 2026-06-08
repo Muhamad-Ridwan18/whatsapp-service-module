@@ -8,6 +8,8 @@ import { sendSuccess } from '../../utils/response.js';
 import { apiKeyAuth, jwtAuth, requirePermission } from '../../middleware/auth.js';
 import { createSessionSchema, sessionIdParamSchema } from './session.schema.js';
 import { assertApiKeySessionAccess } from '../../utils/session-access.js';
+import { userRepository } from '../../services/database/repositories/user.repository.js';
+import { normalizePhoneDigits } from '../../utils/phone.js';
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/session/create', {
@@ -19,6 +21,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const body = createSessionSchema.parse(request.body);
     const apiKey = request.apiKey!;
+
+    const owner = await userRepository.findById(apiKey.user_id);
+    if (owner?.phone_number) {
+      const registered = normalizePhoneDigits(owner.phone_number);
+      const requested = normalizePhoneDigits(body.phoneNumber);
+      if (registered !== requested) {
+        throw new AppError(
+          `Nomor harus ${owner.phone_number} (terikat ke akun Anda)`,
+          ERR.VALIDATION,
+          422,
+        );
+      }
+    }
+
     const bound = await sessionRepository.findByApiKeyId(apiKey.id);
     if (bound && bound.session_id !== body.sessionId) {
       throw new AppError(
@@ -51,14 +67,12 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/session/create/admin', {
     preHandler: [jwtAuth],
     schema: { tags: ['Sessions'] },
-  }, async (request, reply) => {
-    const body = createSessionSchema.parse(request.body);
-    await sessionManager.create(body.sessionId, { phoneNumber: body.phoneNumber });
-    return sendSuccess(reply, {
-      sessionId: body.sessionId,
-      phoneNumber: body.phoneNumber,
-      status: sessionManager.getStatus(body.sessionId),
-    }, 201);
+  }, async () => {
+    throw new AppError(
+      'Gunakan dashboard /register untuk buat akun. Satu nomor = satu session = satu API key.',
+      ERR.VALIDATION,
+      422,
+    );
   });
 
   app.get('/api/session/:sessionId/qr', {

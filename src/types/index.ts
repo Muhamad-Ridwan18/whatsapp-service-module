@@ -36,12 +36,14 @@ export interface ApiResponse<T = unknown> {
 export interface JwtPayload {
   sub: number;
   email: string;
+  phone: string | null;
   role: UserRole;
 }
 
 export interface UserRow {
   id: number;
   email: string;
+  phone_number: string | null;
   password_hash: string;
   name: string;
   role: UserRole;

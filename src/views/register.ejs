@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <%- include('partials/head', { title: 'Daftar' }) %>
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card animate-fade-in">
+      <div class="text-center mb-8">
+        <div class="sidebar-brand-icon w-14 h-14 text-xl mx-auto mb-5">W</div>
+        <h1 class="text-2xl font-bold tracking-tight">Buat akun</h1>
+        <p class="text-sm text-txt-secondary mt-2">Satu nomor = satu akun = satu session = satu API key</p>
+      </div>
+
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-error mb-6"><%= error %></div>
+      <% } %>
+
+      <form method="POST" action="/register" class="space-y-5">
+        <div>
+          <label class="label">Nama</label>
+          <input type="text" name="name" required class="input" placeholder="Nama bisnis / toko" autocomplete="name">
+        </div>
+        <div>
+          <label class="label">Nomor WhatsApp</label>
+          <input type="tel" name="phone" required class="input" placeholder="628123456789" autocomplete="tel">
+          <p class="hint">Nomor ini dipakai untuk login, session WhatsApp, dan API.</p>
+        </div>
+        <div>
+          <label class="label">Password</label>
+          <input type="password" name="password" required minlength="6" class="input" placeholder="Min. 6 karakter" autocomplete="new-password">
+        </div>
+        <div>
+          <label class="label">Konfirmasi password</label>
+          <input type="password" name="confirmPassword" required minlength="6" class="input" placeholder="Ulangi password" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-brand w-full">Daftar &amp; hubungkan WhatsApp</button>
+      </form>
+
+      <p class="text-center text-sm text-txt-muted mt-6">
+        Sudah punya akun?
+        <a href="/login" class="text-brand hover:text-brand-light transition-colors">Masuk</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

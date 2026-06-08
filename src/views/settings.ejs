@@ -10,7 +10,7 @@
     <header class="page-header">
       <p class="page-eyebrow">Akun</p>
       <h1 class="page-title">Profil &amp; keamanan</h1>
-      <p class="page-subtitle">Kelola informasi akun dan ubah password Anda.</p>
+      <p class="page-subtitle">Informasi akun terikat ke satu nomor WhatsApp.</p>
     </header>
 
     <%- include('partials/alerts') %>
@@ -21,12 +21,20 @@
           <h2 class="card-title">Informasi akun</h2>
         </div>
         <div class="card-body space-y-0">
-          <div class="flex justify-between items-center gap-4 py-3 border-b border-border">
-            <span class="text-sm text-txt-muted">Email</span>
-            <span class="text-sm font-medium text-right break-all"><%= currentUser.email %></span>
+          <div class="info-row">
+            <span class="info-row-label">Nama</span>
+            <span class="info-row-value"><%= currentUser.name || '—' %></span>
           </div>
-          <div class="flex justify-between items-center gap-4 py-3">
-            <span class="text-sm text-txt-muted">Peran</span>
+          <div class="info-row">
+            <span class="info-row-label">Nomor WhatsApp</span>
+            <span class="info-row-value"><%= currentUser.phone || '—' %></span>
+          </div>
+          <div class="info-row">
+            <span class="info-row-label">Email internal</span>
+            <span class="info-row-value text-xs break-all"><%= currentUser.email %></span>
+          </div>
+          <div class="info-row border-0">
+            <span class="info-row-label">Peran</span>
             <span class="badge-success"><%= roleLabel %></span>
           </div>
         </div>

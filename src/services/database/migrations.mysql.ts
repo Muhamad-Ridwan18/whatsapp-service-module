@@ -147,4 +147,21 @@ export const mysqlMigrations: { version: number; sql: string }[] = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE users ADD COLUMN phone_number VARCHAR(32) NULL;
+
+      UPDATE users u
+      INNER JOIN sessions s ON s.user_id = u.id AND s.phone_number IS NOT NULL
+      SET u.phone_number = s.phone_number
+      WHERE u.phone_number IS NULL;
+
+      CREATE UNIQUE INDEX idx_users_phone_unique ON users (phone_number);
+
+      CREATE UNIQUE INDEX idx_sessions_user_unique ON sessions (user_id);
+
+      CREATE UNIQUE INDEX idx_sessions_phone_unique ON sessions (phone_number);
+    `,
+  },
 ];

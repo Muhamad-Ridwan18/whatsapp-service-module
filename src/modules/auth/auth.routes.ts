@@ -14,16 +14,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       tags: ['Auth'],
       body: {
         type: 'object',
-        required: ['email', 'password'],
+        required: ['phone', 'password'],
         properties: {
-          email: { type: 'string' },
+          phone: { type: 'string' },
           password: { type: 'string' },
         },
       },
     },
   }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
-    const user = await userRepository.findByEmail(body.email);
+    const user = await userRepository.findByLogin(body.phone);
 
     if (!user || !(await verifyPassword(body.password, user.password_hash))) {
       throw new AppError('Invalid credentials', ERR.UNAUTHORIZED, 401);
@@ -32,6 +32,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const token = app.jwt.sign({
       sub: user.id,
       email: user.email,
+      phone: user.phone_number,
       role: user.role,
     });
 
@@ -40,6 +41,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone_number,
         name: user.name,
         role: user.role,
       },

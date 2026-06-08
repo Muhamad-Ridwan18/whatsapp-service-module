@@ -15,43 +15,17 @@ export type ParsedSendMessage = z.infer<typeof sendMessageSchema> & {
   mediaBuffer?: Buffer;
 };
 
-function pickString(raw: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const val = raw[key];
-    if (typeof val === 'string' && val.trim()) return val.trim();
-    if (typeof val === 'number') return String(val);
-  }
-  return undefined;
-}
-
-/** Session untuk API key — 1 key = 1 session, tanpa perlu kirim sessionId. */
+/** Session untuk API key — 1 akun = 1 nomor = 1 session. */
 export async function resolveSessionForApiKey(apiKey: ApiKeyRow): Promise<string> {
   const bound = await sessionRepository.findByApiKeyId(apiKey.id);
-  if (bound) {
-    return bound.session_id;
-  }
-
-  const userSessions = await sessionRepository.listByUserId(apiKey.user_id);
-  const unbound = userSessions.filter((s) => s.api_key_id == null);
-
-  if (unbound.length === 1) {
-    await sessionRepository.bindApiKey(unbound[0].session_id, apiKey.id);
-    return unbound[0].session_id;
-  }
-
-  if (userSessions.length === 0) {
+  if (!bound) {
     throw new AppError(
-      'Belum ada session WhatsApp. Buat & scan QR di dashboard terlebih dahulu.',
+      'Session belum ada. Login dashboard dengan nomor WhatsApp dan scan QR.',
       ERR.VALIDATION,
       422,
     );
   }
-
-  throw new AppError(
-    'Session belum terhubung ke API key ini. Hubungi admin atau buat session baru dari dashboard.',
-    ERR.VALIDATION,
-    422,
-  );
+  return bound.session_id;
 }
 
 export async function parseSendRequestBody(
@@ -64,15 +38,6 @@ export async function parseSendRequestBody(
     : {};
 
   const boundSessionId = await resolveSessionForApiKey(apiKey);
-  const requested = pickString(raw, 'sessionId', 'session');
-
-  if (requested && requested !== boundSessionId) {
-    throw new AppError(
-      'sessionId tidak cocok dengan API key ini',
-      ERR.FORBIDDEN,
-      403,
-    );
-  }
 
   const parsed = sendMessageSchema.parse({
     ...raw,

@@ -9,22 +9,18 @@ export interface CreateApiKeyInput {
   webhook_url?: string | null;
   webhook_events?: string[];
   ip_whitelist?: string | null;
-  /** true = nonaktifkan key lama lalu buat baru (default) */
   replaceExisting?: boolean;
 }
+
+const DEFAULT_PERMISSIONS = ['message:send', 'session:read', 'session:manage'];
 
 export async function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
   const active = await apiKeyRepository.findActiveByUserId(userId);
   if (active && input.replaceExisting === false) {
-    throw new AppError(
-      'Akun ini sudah memiliki API key aktif. Nonaktifkan dulu atau gunakan replace.',
-      ERR.KEY_LIMIT,
-      409,
-    );
+    throw new AppError('Akun ini sudah memiliki API key aktif.', ERR.KEY_LIMIT, 409);
   }
 
   const previousKeyId = active?.id;
-
   if (active) {
     await apiKeyRepository.deactivateAllByUserId(userId);
   }
@@ -37,7 +33,7 @@ export async function createApiKeyForUser(userId: number, input: CreateApiKeyInp
     name: input.name,
     permissions: input.permissions
       ? JSON.stringify(input.permissions)
-      : undefined,
+      : JSON.stringify(DEFAULT_PERMISSIONS),
     webhook_url: input.webhook_url,
     webhook_events: input.webhook_events
       ? JSON.stringify(input.webhook_events)
@@ -46,12 +42,9 @@ export async function createApiKeyForUser(userId: number, input: CreateApiKeyInp
   });
 
   if (previousKeyId) {
-    await sessionRepository.transferApiKeyBindings(previousKeyId, id);
-  } else {
-    const userSessions = await sessionRepository.listByUserId(userId);
-    const unbound = userSessions.filter((s) => s.api_key_id == null);
-    if (unbound.length === 1) {
-      await sessionRepository.bindApiKey(unbound[0].session_id, id);
+    const session = await sessionRepository.findByUserId(userId);
+    if (session) {
+      await sessionRepository.bindApiKey(session.session_id, id);
     }
   }
 

@@ -1,21 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
+import { config } from '../../config/index.js';
+import { getAccountBundle } from '../../services/account/account.service.js';
 import { auditRepository } from '../../services/database/repositories/audit.repository.js';
 import { messageRepository } from '../../services/database/repositories/message.repository.js';
-import { sessionEventRepository } from '../../services/database/repositories/session-event.repository.js';
-import { sessionRepository } from '../../services/database/repositories/session.repository.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import type { JwtPayload, UserRole } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import {
-  auditActionLabel,
-  formatLogTime,
-  sessionEventLabel,
-  sessionStatusLabel,
-} from '../../utils/labels.js';
-import { parseJsonField } from '../../utils/json-field.js';
+import { auditActionLabel, formatLogTime, sessionEventLabel, sessionStatusLabel } from '../../utils/labels.js';
 
 export async function verifyDashboardCookie(
   request: FastifyRequest,
@@ -64,82 +57,61 @@ export function isDashboardAdmin(role: UserRole): boolean {
   return role === 'super_admin' || role === 'admin';
 }
 
-export function canDashboardAccessSession(
-  authUser: JwtPayload,
-  session: { user_id: number | null } | undefined,
-): boolean {
-  if (!session) return false;
-  if (isDashboardAdmin(authUser.role)) return true;
-  return session.user_id === authUser.sub;
-}
-
 export async function assertDashboardSessionAccess(
   authUser: JwtPayload,
   sessionId: string,
 ) {
-  const session = await sessionRepository.findBySessionId(sessionId);
-  if (!session) {
+  const bundle = await getAccountBundle(authUser.sub);
+  if (!bundle.session || bundle.session.session_id !== sessionId) {
     throw new AppError('Session tidak ditemukan', ERR.SESSION_NOT_FOUND, 404);
   }
-  if (!canDashboardAccessSession(authUser, session)) {
-    throw new AppError(
-      'Session ini bukan milik akun Anda. Hubungi admin untuk nomor yang sama.',
-      ERR.FORBIDDEN,
-      403,
-    );
+  if (!isDashboardAdmin(authUser.role) && bundle.user.id !== authUser.sub) {
+    throw new AppError('Akses ditolak', ERR.FORBIDDEN, 403);
   }
-  return session;
-}
-
-export async function getSessionsForUser(userId: number, role: UserRole) {
-  if (isDashboardAdmin(role)) {
-    return sessionRepository.list();
-  }
-  return sessionRepository.listByUserId(userId);
+  return bundle.session;
 }
 
 export async function getDashboardContext(
   authUser: JwtPayload,
   extras?: Record<string, unknown>,
 ) {
-  const sessions = await getSessionsForUser(authUser.sub, authUser.role);
-  const apiKeys =
-    authUser.role === 'super_admin'
-      ? await apiKeyRepository.listAll()
-      : await apiKeyRepository.findByUserId(authUser.sub);
+  const bundle = await getAccountBundle(authUser.sub);
+  const session = bundle.session;
+  const apiKey = bundle.apiKey;
+  const sessionId = session?.session_id ?? null;
+  const liveStatus = sessionId ? sessionManager.getStatus(sessionId) : 'disconnected';
 
   return {
     currentUser: {
       id: authUser.sub,
       email: authUser.email,
+      phone: bundle.user.phone_number,
+      name: bundle.user.name,
       role: authUser.role,
     },
-    scanSession: null,
+    account: {
+      phone: bundle.user.phone_number,
+      sessionId,
+      sessionStatus: liveStatus,
+      sessionStatusLabel: sessionStatusLabel(liveStatus).label,
+      apiKeyPrefix: apiKey?.key_prefix ?? null,
+      apiKeyActive: !!apiKey?.is_active,
+      webhookUrl: apiKey?.webhook_url ?? null,
+    },
+    scanSession: (extras?.scanSession as string | null | undefined) ?? sessionId,
     newApiKey: null,
     errorMessage: null,
-    successMessage: null,
-    phoneHint: null,
-    apiKeys: apiKeys.map((k) => ({
-      id: k.id,
-      name: k.name,
-      prefix: k.key_prefix,
-      webhook_url: k.webhook_url,
-      permissions: parseJsonField<string[]>(k.permissions, []),
-      is_active: k.is_active,
-      last_used_at: k.last_used_at,
-      created_at: k.created_at,
-    })),
+    successMessage: extras?.successMessage ?? null,
     stats: {
-      totalSessions: sessions.length,
-      connected: sessionManager.getConnectedCount(),
+      connected: liveStatus === 'connected' ? 1 : 0,
       messagesToday: await messageRepository.countToday(),
       queue: messageQueue.getStats(),
     },
-    sessions,
-    recentMessages: await messageRepository.recent(20),
-    auditLogs: await auditRepository.recentSafe(50),
-    users:
-      authUser.role === 'super_admin' ? await userRepository.list() : [],
+    recentMessages: sessionId
+      ? (await messageRepository.recent(10)).filter((m) => m.session_id === sessionId)
+      : [],
+    auditLogs: await auditRepository.recentSafe(20),
+    users: authUser.role === 'super_admin' ? await userRepository.list() : [],
     sessionStatus: {
       connected: sessionStatusLabel('connected'),
       qr_ready: sessionStatusLabel('qr_ready'),
@@ -153,7 +125,10 @@ export async function getDashboardContext(
       'webhook.failed': auditActionLabel('webhook.failed'),
       'user.request': auditActionLabel('user.request'),
     },
-    activeTab: 'whatsapp',
+    formatLogTime,
+    sessionEventLabel,
+    auditActionLabel,
+    baseUrl: config.baseUrl,
     ...extras,
   };
 }
@@ -162,20 +137,25 @@ export async function getLogsContext(
   authUser: JwtPayload,
   query: { sessionId?: string; tab?: string },
 ) {
-  const sessionId = query.sessionId?.trim() || undefined;
+  const bundle = await getAccountBundle(authUser.sub);
+  const sessionId = query.sessionId?.trim() || bundle.session?.session_id;
   const activeLogTab = query.tab === 'audit' || query.tab === 'message' ? query.tab : 'session';
 
-  const [sessionEvents, auditLogs, messageLogs, sessions] = await Promise.all([
+  const { sessionEventRepository } = await import(
+    '../../services/database/repositories/session-event.repository.js'
+  );
+
+  const [sessionEvents, auditLogs, messageLogs] = await Promise.all([
     sessionEventRepository.recentSafe(sessionId, 150),
     auditRepository.recentSafe(150),
     messageRepository.recentLogsSafe(150),
-    getSessionsForUser(authUser.sub, authUser.role),
   ]);
 
   return {
     currentUser: {
       id: authUser.sub,
       email: authUser.email,
+      phone: bundle.user.phone_number,
       role: authUser.role,
     },
     title: 'Log',
@@ -185,7 +165,7 @@ export async function getLogsContext(
     sessionEvents,
     auditLogs,
     messageLogs,
-    sessions,
+    sessions: bundle.session ? [bundle.session] : [],
     errorMessage: null,
     successMessage: null,
     formatLogTime,

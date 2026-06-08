@@ -1,14 +1,16 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../../config/index.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
-import { verifyPassword, hashPassword } from '../../utils/crypto.js';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
-import { sessionRepository } from '../../services/database/repositories/session.repository.js';
-import { createApiKeyForUser } from '../../services/auth/api-key.service.js';
-import { createApiKeySchema } from '../auth/auth.schema.js';
-import { createSessionSchema, sessionIdParamSchema } from '../sessions/session.schema.js';
+import { verifyPassword, hashPassword } from '../../utils/crypto.js';
+import {
+  registerClientAccount,
+  createClientAccountByAdmin,
+  rotateApiKey,
+  getAccountBundle,
+} from '../../services/account/account.service.js';
 import { AppError, ERR } from '../../utils/errors.js';
 import { sendSuccess } from '../../utils/response.js';
 import {
@@ -20,17 +22,49 @@ import {
 } from './dashboard.helper.js';
 import { roleLabel } from '../../utils/labels.js';
 import { authLogger } from '../../services/logger/index.js';
+import type { UserRow } from '../../types/index.js';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: 'Input tidak valid',
-  invalid_session_id: 'Session ID tidak valid',
-  create_failed: 'Gagal membuat session',
-  phone_exists: 'Nomor HP sudah terdaftar pada session lain',
-  session_forbidden: 'Session/nomor ini milik akun lain. Hubungi admin.',
+  phone_exists: 'Nomor WhatsApp sudah terdaftar',
   password_mismatch: 'Konfirmasi password tidak cocok',
   wrong_password: 'Password saat ini salah',
-  user_exists: 'Email sudah terdaftar',
+  session_forbidden: 'Akses ditolak',
+  reconnect_failed: 'Gagal menghubungkan ulang',
+  phone_mismatch: 'Nomor yang discan tidak cocok dengan nomor terdaftar',
 };
+
+function authCookieOptions(request: FastifyRequest) {
+  const forwardedProto = request.headers['x-forwarded-proto'];
+  const isSecure =
+    config.isProd &&
+    (forwardedProto === 'https' || request.protocol === 'https');
+  return {
+    path: '/',
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: 'lax' as const,
+    maxAge: 86400,
+  };
+}
+
+function signDashboardToken(app: FastifyInstance, user: UserRow): string {
+  return app.jwt.sign({
+    sub: user.id,
+    email: user.email,
+    phone: user.phone_number,
+    role: user.role,
+  });
+}
+
+function setAuthCookie(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  user: UserRow,
+): void {
+  reply.setCookie('token', signDashboardToken(app, user), authCookieOptions(request));
+}
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   if (!config.dashboard.enabled) return;
@@ -39,45 +73,87 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     return reply.view('login.ejs', { title: 'Login' });
   });
 
-  app.post('/login', async (request, reply) => {
-    const body = request.body as { email?: string; password?: string };
-    const email = (body.email ?? '').trim().toLowerCase();
+  app.get('/register', async (_request, reply) => {
+    return reply.view('register.ejs', { title: 'Daftar' });
+  });
+
+  app.post('/register', async (request, reply) => {
+    const body = request.body as {
+      name?: string;
+      phone?: string;
+      password?: string;
+      confirmPassword?: string;
+    };
+
+    const name = (body.name ?? '').trim();
+    const phone = (body.phone ?? '').trim();
     const password = body.password ?? '';
-    const user = await userRepository.findByEmail(email);
+
+    if (!name || !phone || password.length < 6) {
+      return reply.view('register.ejs', {
+        title: 'Daftar',
+        error: 'Lengkapi semua field. Password minimal 6 karakter.',
+      });
+    }
+    if (password !== body.confirmPassword) {
+      return reply.view('register.ejs', {
+        title: 'Daftar',
+        error: 'Konfirmasi password tidak cocok.',
+      });
+    }
+
+    try {
+      const created = await registerClientAccount({ phone, password, name });
+      const user = await userRepository.findById(created.userId);
+      if (!user) {
+        return reply.view('register.ejs', { title: 'Daftar', error: 'Gagal membuat akun.' });
+      }
+
+      setAuthCookie(app, request, reply, user);
+      authLogger.info({ phone: created.phone }, 'Client registered');
+      return reply.redirect(`/dashboard?scan=${created.sessionId}&success=registered`);
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERR.SESSION_EXISTS) {
+        return reply.view('register.ejs', { title: 'Daftar', error: 'Nomor WhatsApp sudah terdaftar.' });
+      }
+      if (err instanceof AppError && err.code === ERR.VALIDATION) {
+        return reply.view('register.ejs', { title: 'Daftar', error: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post('/login', async (request, reply) => {
+    const body = request.body as { phone?: string; password?: string };
+    const phone = (body.phone ?? '').trim();
+    const password = body.password ?? '';
+
+    if (!phone) {
+      return reply.view('login.ejs', {
+        title: 'Login',
+        error: 'Nomor WhatsApp wajib diisi.',
+      });
+    }
+
+    const user = await userRepository.findByLogin(phone);
 
     if (!user || !(await verifyPassword(password, user.password_hash))) {
       authLogger.warn(
-        {
-          email,
-          userFound: !!user,
-          dbDriver: config.database.driver,
-        },
+        { phone, userFound: !!user, dbDriver: config.database.driver },
         'Dashboard login failed',
       );
-      return reply.view('login.ejs', { title: 'Login', error: 'Invalid credentials' });
+      return reply.view('login.ejs', {
+        title: 'Login',
+        error: 'Nomor atau password salah.',
+      });
     }
 
-    const token = app.jwt.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
+    setAuthCookie(app, request, reply, user);
+    authLogger.info({ phone, dbDriver: config.database.driver }, 'Dashboard login OK');
 
-    const forwardedProto = request.headers['x-forwarded-proto'];
-    const isSecure =
-      config.isProd &&
-      (forwardedProto === 'https' || request.protocol === 'https');
-
-    reply.setCookie('token', token, {
-      path: '/',
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: 86400,
-    });
-
-    authLogger.info({ email, dbDriver: config.database.driver }, 'Dashboard login OK');
-    return reply.redirect('/dashboard');
+    const bundle = await getAccountBundle(user.id);
+    const scan = bundle.session?.session_id;
+    return reply.redirect(scan ? `/dashboard?scan=${scan}` : '/dashboard');
   });
 
   app.get('/logout', async (_request, reply) => {
@@ -88,15 +164,19 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const query = request.query as { scan?: string; error?: string; phone?: string; success?: string; tab?: string };
+    const query = request.query as { scan?: string; error?: string; success?: string; tab?: string };
+    const successMap: Record<string, string> = {
+      registered: 'Akun berhasil dibuat. Scan QR untuk menghubungkan WhatsApp.',
+      webhook_saved: 'Webhook URL berhasil disimpan.',
+    };
+
     const ctx = await getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
-      scanSession: query.scan ?? null,
-      phoneHint: query.phone ?? null,
-      activeTab: query.tab ?? (query.scan ? 'whatsapp' : 'whatsapp'),
+      activeTab: query.tab ?? 'whatsapp',
+      ...(query.scan ? { scanSession: query.scan } : {}),
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
-      successMessage: query.success === 'key_revoked' ? 'API key berhasil dinonaktifkan' : null,
+      successMessage: query.success ? successMap[query.success] ?? null : null,
     });
 
     return reply.view('dashboard.ejs', ctx);
@@ -104,21 +184,24 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/dashboard/logs', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
-
     const query = request.query as { sessionId?: string; tab?: string };
     const ctx = await getLogsContext(request.authUser!, query);
-
     return reply.view('logs.ejs', ctx);
   });
 
   app.get('/dashboard/settings', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const query = request.query as { error?: string; success?: string };
+    const bundle = await getAccountBundle(request.authUser!.sub);
 
     return reply.view('settings.ejs', {
       title: 'Settings',
       activePage: 'settings',
-      currentUser: request.authUser,
+      currentUser: {
+        ...request.authUser,
+        phone: bundle.user.phone_number,
+        name: bundle.user.name,
+      },
       roleLabel: roleLabel(request.authUser!.role),
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
       successMessage: query.success === '1' ? 'Password berhasil diubah' : null,
@@ -147,7 +230,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const hash = await hashPassword(body.newPassword);
-    await userRepository.updatePassword(user.email, hash);
+    await userRepository.updatePassword(user.id, hash);
     return reply.redirect('/dashboard/settings?success=1');
   });
 
@@ -164,7 +247,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       title: 'Users',
       activePage: 'users',
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
-      successMessage: query.success === '1' ? 'User berhasil dibuat' : null,
+      successMessage: query.success === '1' ? 'Akun klien berhasil dibuat' : null,
     });
 
     return reply.view('users.ejs', ctx);
@@ -180,25 +263,26 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     const body = request.body as {
       name?: string;
-      email?: string;
+      phone?: string;
       password?: string;
-      role?: string;
     };
 
-    if (!body.email || !body.password || body.password.length < 6 || !body.name) {
+    if (!body.phone || !body.password || body.password.length < 6 || !body.name?.trim()) {
       return reply.redirect('/dashboard/users?error=invalid_input');
     }
-    if (await userRepository.findByEmail(body.email)) {
-      return reply.redirect('/dashboard/users?error=user_exists');
-    }
 
-    const passwordHash = await hashPassword(body.password);
-    await userRepository.createClient({
-      email: body.email,
-      password_hash: passwordHash,
-      name: body.name,
-      role: body.role === 'admin' ? 'admin' : 'client',
-    });
+    try {
+      await createClientAccountByAdmin({
+        phone: body.phone,
+        password: body.password,
+        name: body.name.trim(),
+      });
+    } catch (err) {
+      if (err instanceof AppError && err.code === ERR.SESSION_EXISTS) {
+        return reply.redirect('/dashboard/users?error=phone_exists');
+      }
+      throw err;
+    }
 
     return reply.redirect('/dashboard/users?success=1');
   });
@@ -220,163 +304,76 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect('/dashboard/users');
   });
 
-  app.post('/dashboard/session/create', async (request, reply) => {
+  app.post('/dashboard/session/reconnect', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const body = request.body as { phoneNumber?: string; sessionId?: string };
-    const parsed = createSessionSchema.safeParse({
-      phoneNumber: body.phoneNumber ?? '',
-      sessionId: body.sessionId?.trim() || undefined,
-    });
-
-    if (!parsed.success) {
+    const bundle = await getAccountBundle(request.authUser!.sub);
+    const sessionId = bundle.session?.session_id;
+    if (!sessionId) {
       return reply.redirect('/dashboard?error=invalid_input');
     }
 
-    const { sessionId, phoneNumber } = parsed.data;
-
     try {
-      const activeKey = await apiKeyRepository.findActiveByUserId(request.authUser!.sub);
-      const bound = activeKey
-        ? await sessionRepository.findByApiKeyId(activeKey.id)
-        : undefined;
-      if (bound && bound.session_id !== sessionId) {
-        return reply.redirect('/dashboard?error=key_session_limit');
-      }
-
-      await sessionManager.create(sessionId, {
-        userId: request.authUser!.sub,
-        apiKeyId: activeKey?.id,
-        phoneNumber,
-      });
-    } catch (err) {
-      if (err instanceof AppError) {
-        if (err.code === ERR.FORBIDDEN) {
-          return reply.redirect('/dashboard?error=session_forbidden');
-        }
-        if (err.code === ERR.SESSION_EXISTS && err.message.includes('sudah terdaftar')) {
-          return reply.redirect(`/dashboard?error=phone_exists&phone=${phoneNumber}`);
-        }
-        if (err.code === ERR.SESSION_LIMIT) {
-          return reply.redirect('/dashboard?error=session_limit');
-        }
-      }
-      return reply.redirect(`/dashboard?error=create_failed&scan=${sessionId}`);
-    }
-
-    return reply.redirect(`/dashboard?scan=${sessionId}&phone=${phoneNumber}`);
-  });
-
-  app.post('/dashboard/session/:sessionId/reconnect', async (request, reply) => {
-    if (!(await verifyDashboardCookie(request, reply, app))) return;
-    const { sessionId } = sessionIdParamSchema.parse(request.params);
-    try {
-      await assertDashboardSessionAccess(request.authUser!, sessionId);
       await sessionManager.restart(sessionId);
-    } catch (err) {
-      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
-        return reply.redirect('/dashboard?error=session_forbidden');
-      }
-      throw err;
+    } catch {
+      return reply.redirect('/dashboard?error=reconnect_failed');
     }
     return reply.redirect(`/dashboard?scan=${sessionId}`);
   });
 
-  app.post('/dashboard/session/:sessionId/disconnect', async (request, reply) => {
+  app.post('/dashboard/session/disconnect', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
-    const { sessionId } = sessionIdParamSchema.parse(request.params);
-    try {
-      await assertDashboardSessionAccess(request.authUser!, sessionId);
-      await sessionManager.disconnect(sessionId);
-    } catch (err) {
-      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
-        return reply.redirect('/dashboard?error=session_forbidden');
-      }
-      throw err;
+
+    const bundle = await getAccountBundle(request.authUser!.sub);
+    const sessionId = bundle.session?.session_id;
+    if (!sessionId) {
+      return reply.redirect('/dashboard');
     }
+
+    await sessionManager.disconnect(sessionId);
     return reply.redirect('/dashboard');
   });
 
-  app.post('/dashboard/session/:sessionId/delete', async (request, reply) => {
+  app.post('/dashboard/api-key/rotate', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
-    const { sessionId } = sessionIdParamSchema.parse(request.params);
-    try {
-      await assertDashboardSessionAccess(request.authUser!, sessionId);
-      await sessionManager.deleteSession(sessionId);
-    } catch (err) {
-      if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
-        return reply.redirect('/dashboard?error=session_forbidden');
+
+    const body = request.body as { webhook_url?: string };
+    const { apiKey } = await rotateApiKey(request.authUser!.sub);
+
+    if (body.webhook_url !== undefined) {
+      const bundle = await getAccountBundle(request.authUser!.sub);
+      if (bundle.apiKey) {
+        await apiKeyRepository.update(bundle.apiKey.id, { webhook_url: body.webhook_url || null });
       }
-      throw err;
     }
-    return reply.redirect('/dashboard');
-  });
-
-  app.post('/dashboard/api-keys/create', async (request, reply) => {
-    if (!(await verifyDashboardCookie(request, reply, app))) return;
-
-    const body = request.body as { name?: string; webhook_url?: string };
-
-    const parsed = createApiKeySchema.safeParse({
-      name: body.name ?? 'Laravel App',
-      webhook_url: body.webhook_url || null,
-      permissions: [
-        'message:send',
-        'session:read',
-        'session:create',
-        'session:manage',
-      ],
-    });
-
-    if (!parsed.success) {
-      return reply.redirect('/dashboard?error=invalid_input');
-    }
-
-    const created = await createApiKeyForUser(request.authUser!.sub, {
-      name: parsed.data.name,
-      permissions: parsed.data.permissions ?? [
-        'message:send',
-        'session:read',
-        'session:create',
-        'session:manage',
-      ],
-      webhook_url: parsed.data.webhook_url,
-      webhook_events: parsed.data.webhook_events,
-    });
 
     const ctx = await getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
       activeTab: 'apikeys',
-      newApiKey: created.apiKey,
-      successMessage: created.replaced
-        ? 'API key baru dibuat. Key lama otomatis dinonaktifkan.'
-        : 'API key berhasil dibuat.',
+      newApiKey: apiKey,
+      successMessage: 'API key baru dibuat. Key lama otomatis dinonaktifkan.',
     });
 
     return reply.view('dashboard.ejs', ctx);
   });
 
-  app.post('/dashboard/api-keys/:id/revoke', async (request, reply) => {
+  app.post('/dashboard/webhook', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const id = parseInt((request.params as { id: string }).id, 10);
-    const key =
-      request.authUser!.role === 'super_admin'
-        ? await apiKeyRepository.findById(id)
-        : await apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
-
-    if (key?.is_active) {
-      await apiKeyRepository.deactivate(id);
+    const body = request.body as { webhook_url?: string };
+    const bundle = await getAccountBundle(request.authUser!.sub);
+    if (bundle.apiKey) {
+      await apiKeyRepository.update(bundle.apiKey.id, { webhook_url: body.webhook_url?.trim() || null });
     }
 
-    return reply.redirect('/dashboard?success=key_revoked&tab=apikeys');
+    return reply.redirect('/dashboard?tab=apikeys&success=webhook_saved');
   });
 
   app.get('/dashboard/session/:sessionId/qr', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const { sessionId } = sessionIdParamSchema.parse(request.params);
+    const sessionId = (request.params as { sessionId: string }).sessionId;
     await assertDashboardSessionAccess(request.authUser!, sessionId);
 
     return sendSuccess(reply, {
@@ -388,27 +385,17 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.post('/dashboard/send-test', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const body = request.body as {
-      sessionId?: string;
-      to?: string;
-      message?: string;
-    };
+    const body = request.body as { to?: string; message?: string };
+    const bundle = await getAccountBundle(request.authUser!.sub);
+    const sessionId = bundle.session?.session_id;
 
-    if (body.sessionId && body.to && body.message) {
-      try {
-        await assertDashboardSessionAccess(request.authUser!, body.sessionId);
-        messageQueue.enqueue(body.sessionId, body.to, {
-          type: 'text',
-          message: body.message,
-        });
-      } catch (err) {
-        if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
-          return reply.redirect('/dashboard?error=session_forbidden');
-        }
-        throw err;
-      }
+    if (sessionId && body.to && body.message) {
+      messageQueue.enqueue(sessionId, body.to, {
+        type: 'text',
+        message: body.message,
+      });
     }
 
-    return reply.redirect('/dashboard');
+    return reply.redirect('/dashboard?tab=activity');
   });
 }

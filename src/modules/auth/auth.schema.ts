@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  phone: z.string().min(10, 'Nomor WhatsApp tidak valid'),
   password: z.string().min(6),
 });
 

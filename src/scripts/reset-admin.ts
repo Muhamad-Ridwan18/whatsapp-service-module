@@ -11,6 +11,7 @@ function parseArgs() {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--email' || arg === '-e') result.email = args[++i] ?? '';
+    if (arg === '--phone') result.phone = args[++i] ?? '';
     if (arg === '--password' || arg === '-p') result.password = args[++i] ?? '';
     if (arg === '--name' || arg === '-n') result.name = args[++i] ?? '';
     if (arg === '--force-recreate') result.forceRecreate = 'true';
@@ -22,13 +23,19 @@ function parseArgs() {
 async function main(): Promise<void> {
   const args = parseArgs();
   const email = args.email || config.admin.email;
+  const phone = args.phone || config.admin.phone || null;
   const password = args.password || config.admin.password;
   const name = args.name || config.admin.name;
   const forceRecreate = args.forceRecreate === 'true';
 
   if (!email || !password) {
-    console.error('Usage: npm run admin:reset [-- --email admin@localhost --password secret123 --name "Admin"]');
+    console.error('Usage: npm run admin:reset [-- --phone 628000000000 --password secret123 --name "Admin"]');
     console.error('       npm run admin:reset -- --force-recreate   (hapus semua user, buat ulang dari .env)');
+    process.exit(1);
+  }
+
+  if (!phone) {
+    console.error('ADMIN_PHONE wajib untuk login dashboard. Set di .env atau --phone 628...');
     process.exit(1);
   }
 
@@ -44,12 +51,13 @@ async function main(): Promise<void> {
     await userRepository.deleteAll();
     await userRepository.create({
       email,
+      phone_number: phone,
       password_hash: passwordHash,
       name,
       role: 'super_admin',
     });
     console.log('Admin dibuat ulang (semua user dihapus):');
-    console.log(`  Email   : ${email}`);
+    console.log(`  Login   : ${phone}`);
     console.log(`  Password: (dari argumen / .env)`);
     console.log(`  Name    : ${name}`);
     await db.close();
@@ -58,9 +66,13 @@ async function main(): Promise<void> {
 
   const existing = await userRepository.findByEmail(email);
   if (existing) {
-    await userRepository.updateAdmin(email, { password_hash: passwordHash, name });
+    await userRepository.updateAdmin(email, {
+      password_hash: passwordHash,
+      name,
+      phone_number: phone ?? undefined,
+    });
     console.log('Password admin berhasil diupdate:');
-    console.log(`  Email: ${email}`);
+    console.log(`  Login: ${phone}`);
   } else {
     const users = await userRepository.list();
     const superAdmin = users.find((u) => u.role === 'super_admin');
@@ -69,18 +81,20 @@ async function main(): Promise<void> {
         password_hash: passwordHash,
         name,
         new_email: email !== superAdmin.email ? email : undefined,
+        phone_number: phone ?? undefined,
       });
       console.log('Super admin berhasil diupdate:');
-      console.log(`  Email: ${email}`);
+      console.log(`  Login: ${phone}`);
     } else {
       await userRepository.create({
         email,
+        phone_number: phone,
         password_hash: passwordHash,
         name,
         role: 'super_admin',
       });
       console.log('Admin baru dibuat:');
-      console.log(`  Email: ${email}`);
+      console.log(`  Login: ${phone}`);
     }
   }
 

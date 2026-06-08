@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "tsx src/services/database/migrate.ts",
+    "db:reset": "tsx src/scripts/reset-database.ts",
     "admin:reset": "tsx src/scripts/reset-admin.ts",
     "admin:verify-login": "tsx src/scripts/verify-login.ts",
     "pm2:start": "pm2 start ecosystem.config.js",

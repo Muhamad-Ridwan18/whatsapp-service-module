@@ -88,7 +88,7 @@
       box.innerHTML =
         '<div class="text-center"><p class="text-3xl text-brand mb-2">✓</p>' +
         '<p class="text-brand font-semibold">Terhubung</p>' +
-        '<p class="hint mt-1">Siap kirim pesan</p></div>';
+        '<p class="hint mt-1">Siap kirim pesan via API</p></div>';
       stopQrWatch();
       return;
     }
@@ -118,7 +118,6 @@
       return;
     }
 
-    // Status update tanpa QR baru — jangan hapus QR yang sudah tampil
     if (!data.qr && lastQrData) {
       applyQrImage(box, lastQrData);
       return;
@@ -206,14 +205,12 @@
       }
     };
 
-    // Fallback jarang — hanya jika WS lambat pertama kali
     setTimeout(function () {
       if (activeSessionId === sessionId && !lastQrData && lastStatus !== 'connected') {
         fetchQrFallback(sessionId);
       }
     }, 4000);
 
-    // Polling cadangan 60 detik — QR WhatsApp sendiri refresh ~60 detik
     pollTimer = setInterval(function () {
       if (activeSessionId !== sessionId) return;
       if (lastStatus === 'connected' || lastStatus === 'failed') {
@@ -224,6 +221,13 @@
     }, 60000);
   }
 
+  var btnShowQr = document.getElementById('btnShowQr');
+  if (btnShowQr) {
+    btnShowQr.addEventListener('click', function () {
+      loadQr(btnShowQr.dataset.session || '');
+    });
+  }
+
   document.querySelectorAll('.btn-show-qr').forEach(function (btn) {
     btn.addEventListener('click', function () {
       loadQr(btn.dataset.session || '');
@@ -232,18 +236,6 @@
 
   if (scanSession) {
     setTimeout(function () { loadQr(scanSession); }, 500);
-  }
-
-  var phone = document.getElementById('phoneNumber');
-  var sid = document.getElementById('sessionId');
-  if (phone && sid) {
-    phone.addEventListener('input', function () {
-      if (sid.dataset.manual === 'true') return;
-      var d = phone.value.replace(/\D/g, '');
-      if (d.startsWith('0')) d = '62' + d.slice(1);
-      sid.value = d ? 'wa-' + d : '';
-    });
-    sid.addEventListener('input', function () { sid.dataset.manual = 'true'; });
   }
 
   document.querySelectorAll('form[data-confirm]').forEach(function (f) {
@@ -259,6 +251,17 @@
       navigator.clipboard.writeText(keyVal.textContent || '').then(function () {
         copyBtn.textContent = 'Tersalin!';
         setTimeout(function () { copyBtn.textContent = 'Salin Key'; }, 2000);
+      });
+    });
+  }
+
+  var copyEnvBtn = document.getElementById('btnCopyEnv');
+  var envSnippet = document.getElementById('envSnippet');
+  if (copyEnvBtn && envSnippet) {
+    copyEnvBtn.addEventListener('click', function () {
+      navigator.clipboard.writeText(envSnippet.textContent || '').then(function () {
+        copyEnvBtn.textContent = 'Tersalin!';
+        setTimeout(function () { copyEnvBtn.textContent = 'Salin konfigurasi'; }, 2000);
       });
     });
   }

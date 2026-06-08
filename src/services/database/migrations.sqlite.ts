@@ -137,4 +137,27 @@ export const sqliteMigrations: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_session_events_event ON session_events(event);
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE users ADD COLUMN phone_number TEXT;
+
+      UPDATE users
+      SET phone_number = (
+        SELECT s.phone_number FROM sessions s
+        WHERE s.user_id = users.id AND s.phone_number IS NOT NULL
+        LIMIT 1
+      )
+      WHERE phone_number IS NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+        ON users(phone_number) WHERE phone_number IS NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_user_unique
+        ON sessions(user_id) WHERE user_id IS NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_phone_unique
+        ON sessions(phone_number) WHERE phone_number IS NOT NULL;
+    `,
+  },
 ];

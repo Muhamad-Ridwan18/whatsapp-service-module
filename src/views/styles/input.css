@@ -147,6 +147,68 @@
     @apply w-7 h-7 rounded-lg bg-brand/15 text-brand text-xs font-bold flex items-center justify-center shrink-0;
   }
 
+  /* Flow progress bar */
+  .flow-progress {
+    @apply flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-1;
+  }
+  .flow-step {
+    @apply flex flex-col items-center gap-1 shrink-0 min-w-[52px];
+  }
+  .flow-step-num {
+    @apply w-7 h-7 rounded-full border border-border text-[11px] font-bold flex items-center justify-center text-txt-muted bg-bg-card;
+  }
+  .flow-step-label {
+    @apply text-[10px] text-txt-muted font-medium whitespace-nowrap;
+  }
+  .flow-step--active .flow-step-num {
+    @apply border-brand bg-brand/15 text-brand;
+  }
+  .flow-step--active .flow-step-label {
+    @apply text-brand;
+  }
+  .flow-step--done .flow-step-num {
+    @apply border-brand bg-brand text-white;
+  }
+  .flow-step--done .flow-step-label {
+    @apply text-txt-secondary;
+  }
+  .flow-step-line {
+    @apply flex-1 h-px bg-border min-w-[16px] max-w-[40px];
+  }
+  .flow-step-line--done {
+    @apply bg-brand/40;
+  }
+
+  /* Account bundle overview */
+  .account-bundle {
+    @apply grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 sm:mb-8;
+  }
+  .account-bundle-item {
+    @apply bg-bg-card border border-border rounded-xl px-4 py-3;
+  }
+  .account-bundle-label {
+    @apply text-[10px] text-txt-muted font-medium uppercase tracking-wide;
+  }
+  .account-bundle-value {
+    @apply text-sm font-semibold text-txt-primary mt-1;
+  }
+
+  /* Info rows */
+  .info-row {
+    @apply flex justify-between items-center gap-4 py-3 border-b border-border;
+  }
+  .info-row-label {
+    @apply text-sm text-txt-muted shrink-0;
+  }
+  .info-row-value {
+    @apply text-sm font-medium text-right text-txt-primary;
+  }
+
+  /* Code blocks */
+  .code-block {
+    @apply w-full bg-bg border border-border rounded-xl px-4 py-3 text-xs font-mono text-txt-secondary overflow-x-auto whitespace-pre-wrap break-all;
+  }
+
   /* ===== FORMS ===== */
   .label {
     @apply block text-xs font-medium text-txt-secondary mb-1.5;

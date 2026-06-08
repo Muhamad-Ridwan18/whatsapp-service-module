@@ -1,6 +1,7 @@
 import type { UserRole, UserRow } from '../../../types/index.js';
 import { db } from '../index.js';
 import { dbNow } from '../sql.js';
+import { normalizePhoneDigits } from '../../../utils/phone.js';
 
 export const userRepository = {
   async findByEmail(email: string): Promise<UserRow | undefined> {
@@ -9,6 +10,21 @@ export const userRepository = {
       'SELECT * FROM users WHERE LOWER(TRIM(email)) = ? AND is_active = 1',
       [normalized],
     );
+  },
+
+  async findByPhoneNumber(phone: string): Promise<UserRow | undefined> {
+    const normalized = normalizePhoneDigits(phone);
+    return db.get<UserRow>(
+      'SELECT * FROM users WHERE phone_number = ? AND is_active = 1',
+      [normalized],
+    );
+  },
+
+  /** Login hanya dengan nomor WhatsApp. */
+  async findByLogin(phone: string): Promise<UserRow | undefined> {
+    const normalized = normalizePhoneDigits(phone.trim());
+    if (normalized.length < 10) return undefined;
+    return this.findByPhoneNumber(normalized);
   },
 
   async findById(id: number): Promise<UserRow | undefined> {
@@ -22,13 +38,20 @@ export const userRepository = {
 
   async create(data: {
     email: string;
+    phone_number?: string | null;
     password_hash: string;
     name: string;
     role: UserRole;
   }): Promise<number> {
     const result = await db.run(
-      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
-      [data.email, data.password_hash, data.name, data.role],
+      'INSERT INTO users (email, phone_number, password_hash, name, role) VALUES (?, ?, ?, ?, ?)',
+      [
+        data.email,
+        data.phone_number ?? null,
+        data.password_hash,
+        data.name,
+        data.role,
+      ],
     );
     return result.lastInsertRowid;
   },
@@ -37,7 +60,15 @@ export const userRepository = {
     return db.all<UserRow>('SELECT * FROM users ORDER BY id');
   },
 
-  async updatePassword(email: string, passwordHash: string): Promise<boolean> {
+  async updatePassword(id: number, passwordHash: string): Promise<boolean> {
+    const result = await db.run(
+      'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+      [passwordHash, dbNow(), id],
+    );
+    return result.changes > 0;
+  },
+
+  async updatePasswordByEmail(email: string, passwordHash: string): Promise<boolean> {
     const result = await db.run(
       'UPDATE users SET password_hash = ?, updated_at = ? WHERE email = ?',
       [passwordHash, dbNow(), email],
@@ -47,10 +78,10 @@ export const userRepository = {
 
   async updateAdmin(
     email: string,
-    data: { password_hash?: string; name?: string; new_email?: string },
+    data: { password_hash?: string; name?: string; new_email?: string; phone_number?: string },
   ): Promise<boolean> {
     const sets: string[] = ['updated_at = ?'];
-    const params: string[] = [dbNow()];
+    const params: (string | null)[] = [dbNow()];
 
     if (data.password_hash) {
       sets.push('password_hash = ?');
@@ -64,6 +95,10 @@ export const userRepository = {
       sets.push('email = ?');
       params.push(data.new_email);
     }
+    if (data.phone_number !== undefined) {
+      sets.push('phone_number = ?');
+      params.push(data.phone_number);
+    }
 
     params.push(email);
     const result = await db.run(`UPDATE users SET ${sets.join(', ')} WHERE email = ?`, params);
@@ -76,19 +111,5 @@ export const userRepository = {
 
   async deactivate(id: number): Promise<void> {
     await db.run('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?', [dbNow(), id]);
-  },
-
-  async createClient(data: {
-    email: string;
-    password_hash: string;
-    name: string;
-    role?: UserRole;
-  }): Promise<number> {
-    return this.create({
-      email: data.email,
-      password_hash: data.password_hash,
-      name: data.name,
-      role: data.role ?? 'client',
-    });
   },
 };

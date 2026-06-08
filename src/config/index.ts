@@ -94,6 +94,7 @@ export const config = {
 
   admin: {
     email: (process.env.ADMIN_EMAIL ?? 'admin@localhost').trim(),
+    phone: (process.env.ADMIN_PHONE ?? '').trim() || null,
     password: (process.env.ADMIN_PASSWORD ?? 'changeme123').trim(),
     name: (process.env.ADMIN_NAME ?? 'Super Admin').trim(),
   },

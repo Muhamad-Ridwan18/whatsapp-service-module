@@ -4,7 +4,7 @@ import { db } from '../services/database/index.js';
 import { userRepository } from '../services/database/repositories/user.repository.js';
 import { verifyPassword } from '../utils/crypto.js';
 
-const email = (process.argv[2] ?? config.admin.email).trim().toLowerCase();
+const phone = (process.argv[2] ?? config.admin.phone ?? '').trim();
 const password = process.argv[3] ?? config.admin.password;
 
 async function main(): Promise<void> {
@@ -16,36 +16,34 @@ async function main(): Promise<void> {
   } else {
     console.log('SQLite    :', config.database.path);
   }
-  console.log('Test email:', email);
+  if (!phone) {
+    console.error('Nomor wajib. Set ADMIN_PHONE di .env atau: npm run admin:verify-login -- 628...');
+    process.exit(1);
+  }
+
+  console.log('Test phone:', phone);
   console.log('');
 
   await db.connect();
 
-  const user = await userRepository.findByEmail(email);
+  const user = await userRepository.findByLogin(phone);
   if (!user) {
     const any = await db.get<{ c: number }>('SELECT COUNT(*) as c FROM users');
-    const byEmail = await db.get<{ email: string; is_active: number }>(
-      'SELECT email, is_active FROM users WHERE LOWER(email) = LOWER(?)',
-      [email],
-    );
     console.log('FAIL: user tidak ditemukan (is_active=1)');
     console.log('Total users di DB:', any?.c ?? 0);
-    if (byEmail) {
-      console.log('User ada tapi is_active =', byEmail.is_active);
-    }
     await db.close();
     process.exit(1);
   }
 
   const hash = String(user.password_hash).trim();
   const ok = await verifyPassword(password, hash);
-  console.log('User found  :', user.email, `(${user.role})`);
+  console.log('User found  :', user.phone_number, `(${user.role})`);
   console.log('Hash length :', hash.length);
   console.log('Password OK :', ok ? 'YES' : 'NO');
 
   if (!ok) {
     console.log('\nJalankan reset password:');
-    console.log(`  npm run admin:reset -- --email ${email} --password "PASSWORD_BARU"`);
+    console.log(`  npm run admin:reset -- --phone ${phone} --password "PASSWORD_BARU"`);
   }
 
   await db.close();

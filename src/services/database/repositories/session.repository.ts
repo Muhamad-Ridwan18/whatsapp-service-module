@@ -11,11 +11,16 @@ export const sessionRepository = {
     return db.all<SessionRow>('SELECT * FROM sessions ORDER BY created_at DESC');
   },
 
-  async listByUserId(userId: number): Promise<SessionRow[]> {
-    return db.all<SessionRow>(
-      'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC',
+  async findByUserId(userId: number): Promise<SessionRow | undefined> {
+    return db.get<SessionRow>(
+      'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
       [userId],
     );
+  },
+
+  async listByUserId(userId: number): Promise<SessionRow[]> {
+    const row = await this.findByUserId(userId);
+    return row ? [row] : [];
   },
 
   async findByApiKeyId(apiKeyId: number): Promise<SessionRow | undefined> {

@@ -13,14 +13,11 @@
   </div>
   <div class="session-card-actions">
     <button type="button" class="btn-ghost text-brand btn-show-qr" data-session="<%= s.session_id %>">Tampilkan QR</button>
-    <form method="POST" action="/dashboard/session/<%= s.session_id %>/reconnect" class="inline">
+    <form method="POST" action="/dashboard/session/reconnect" class="inline">
       <button type="submit" class="btn-ghost">Sambung ulang</button>
     </form>
-    <form method="POST" action="/dashboard/session/<%= s.session_id %>/disconnect" class="inline">
+    <form method="POST" action="/dashboard/session/disconnect" class="inline">
       <button type="submit" class="btn-ghost">Putuskan</button>
-    </form>
-    <form method="POST" action="/dashboard/session/<%= s.session_id %>/delete" class="inline" data-confirm="Hapus session ini?">
-      <button type="submit" class="btn-danger">Hapus</button>
     </form>
   </div>
 </div>
