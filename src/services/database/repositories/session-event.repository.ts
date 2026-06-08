@@ -34,4 +34,12 @@ export const sessionEventRepository = {
       [limit],
     );
   },
+
+  async recentSafe(sessionId?: string, limit = 100): Promise<SessionEventRow[]> {
+    try {
+      return await this.recent(sessionId, limit);
+    } catch {
+      return [];
+    }
+  },
 };

@@ -36,5 +36,20 @@ export function errorHandler(
   }
 
   logger.error({ err: error }, 'Unhandled error');
+
+  const accept = _request.headers.accept ?? '';
+  const wantsHtml =
+    _request.url.startsWith('/dashboard') ||
+    _request.url === '/login' ||
+    accept.includes('text/html');
+
+  if (wantsHtml && typeof reply.view === 'function') {
+    void reply.status(500).view('login.ejs', {
+      title: 'Error',
+      error: 'Terjadi kesalahan server. Pastikan database sudah dimigrasi (npm run migrate) lalu coba lagi.',
+    });
+    return;
+  }
+
   void sendError(reply, 'Internal server error', 'ERR_INTERNAL', 500);
 }

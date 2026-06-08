@@ -28,4 +28,12 @@ export const auditRepository = {
   async recent(limit = 100) {
     return db.all('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?', [limit]);
   },
+
+  async recentSafe(limit = 100) {
+    try {
+      return await this.recent(limit);
+    } catch {
+      return [];
+    }
+  },
 };

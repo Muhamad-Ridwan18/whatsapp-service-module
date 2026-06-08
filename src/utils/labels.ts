@@ -30,3 +30,26 @@ export function auditActionLabel(action: string): string {
   };
   return map[action] ?? action;
 }
+
+export function sessionEventLabel(event: string): string {
+  const map: Record<string, string> = {
+    connected: 'Terhubung',
+    disconnected: 'Terputus',
+    connection_close: 'Koneksi putus',
+    qr_ready: 'QR siap scan',
+    initializing: 'Memulai',
+    reconnecting: 'Reconnect',
+    failed: 'Gagal',
+  };
+  return map[event] ?? event;
+}
+
+export function formatLogTime(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('id-ID', {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  });
+}

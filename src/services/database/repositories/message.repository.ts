@@ -70,4 +70,19 @@ export const messageRepository = {
     );
     return row?.c ?? 0;
   },
+
+  async recentLogs(limit = 100) {
+    return db.all(
+      'SELECT * FROM message_logs ORDER BY created_at DESC LIMIT ?',
+      [limit],
+    );
+  },
+
+  async recentLogsSafe(limit = 100) {
+    try {
+      return await this.recentLogs(limit);
+    } catch {
+      return [];
+    }
+  },
 };

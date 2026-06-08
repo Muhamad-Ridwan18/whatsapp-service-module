@@ -15,6 +15,7 @@ import {
   verifyDashboardCookie,
   requireDashboardRole,
   getDashboardContext,
+  getLogsContext,
   assertDashboardSessionAccess,
 } from './dashboard.helper.js';
 import { roleLabel } from '../../utils/labels.js';
@@ -82,6 +83,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.view('dashboard.ejs', ctx);
+  });
+
+  app.get('/dashboard/logs', async (request, reply) => {
+    if (!(await verifyDashboardCookie(request, reply, app))) return;
+
+    const query = request.query as { sessionId?: string; tab?: string };
+    const ctx = await getLogsContext(request.authUser!, query);
+
+    return reply.view('logs.ejs', ctx);
   });
 
   app.get('/dashboard/settings', async (request, reply) => {

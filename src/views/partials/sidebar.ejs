@@ -15,6 +15,7 @@
 
     <nav class="sidebar-nav">
       <a href="/dashboard" class="<%= activePage === 'dashboard' ? 'sidebar-link-active' : 'sidebar-link' %>">Beranda</a>
+      <a href="/dashboard/logs" class="<%= activePage === 'logs' ? 'sidebar-link-active' : 'sidebar-link' %>">Log</a>
       <% if (currentUser && currentUser.role === 'super_admin') { %>
       <a href="/dashboard/users" class="<%= activePage === 'users' ? 'sidebar-link-active' : 'sidebar-link' %>">Pengguna</a>
       <% } %>

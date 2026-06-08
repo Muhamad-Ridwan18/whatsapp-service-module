@@ -290,8 +290,9 @@
       </div>
 
       <div class="card">
-        <div class="card-header">
+        <div class="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 class="card-title">Log sistem</h2>
+          <a href="/dashboard/logs" class="btn-outline text-xs shrink-0">Lihat semua log →</a>
         </div>
         <div class="card-body">
           <% if (!auditLogs || auditLogs.length === 0) { %>

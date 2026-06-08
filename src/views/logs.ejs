@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <%- include('partials/head', { title: 'Log' }) %>
+</head>
+<body>
+  <%- include('partials/sidebar', { currentUser, activePage: 'logs', pageTitle: 'Log' }) %>
+
+  <div class="page-inner">
+    <header class="page-header">
+      <p class="page-eyebrow">Monitoring</p>
+      <h1 class="page-title">Log sistem</h1>
+      <p class="page-subtitle">Session connect/disconnect, aktivitas API, dan event pesan.</p>
+    </header>
+
+    <%- include('partials/alerts') %>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <form method="GET" action="/dashboard/logs" class="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <input type="hidden" name="tab" value="<%= activeLogTab %>">
+          <div class="flex-1">
+            <label class="label" for="sessionId">Filter session</label>
+            <select id="sessionId" name="sessionId" class="input">
+              <option value="">Semua session</option>
+              <% sessions.forEach(s => { %>
+              <option value="<%= s.session_id %>" <%= filterSessionId === s.session_id ? 'selected' : '' %>>
+                <%= s.session_id %><%= s.phone_number ? ' · ' + s.phone_number : '' %>
+              </option>
+              <% }) %>
+            </select>
+          </div>
+          <button type="submit" class="btn-brand shrink-0">Terapkan filter</button>
+          <% if (filterSessionId) { %>
+          <a href="/dashboard/logs?tab=<%= activeLogTab %>" class="btn-outline shrink-0">Reset</a>
+          <% } %>
+        </form>
+      </div>
+    </div>
+
+    <div class="tabs-desktop mb-4" role="tablist">
+      <a href="/dashboard/logs?tab=session<%= filterSessionId ? '&sessionId=' + filterSessionId : '' %>"
+         class="<%= activeLogTab === 'session' ? 'tab-active' : 'tab' %>">Session</a>
+      <a href="/dashboard/logs?tab=audit<%= filterSessionId ? '&sessionId=' + filterSessionId : '' %>"
+         class="<%= activeLogTab === 'audit' ? 'tab-active' : 'tab' %>">Audit API</a>
+      <a href="/dashboard/logs?tab=message<%= filterSessionId ? '&sessionId=' + filterSessionId : '' %>"
+         class="<%= activeLogTab === 'message' ? 'tab-active' : 'tab' %>">Pesan</a>
+    </div>
+
+    <% if (activeLogTab === 'session') { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Event session</h2>
+        <p class="card-desc">Connect, disconnect, QR, reconnect — termasuk kode error Baileys.</p>
+      </div>
+      <div class="card-body p-0 sm:p-0">
+        <% if (!sessionEvents.length) { %>
+          <div class="empty"><p class="empty-text">Belum ada log session. Pastikan migrasi v3 sudah jalan: <code class="text-xs">npm run migrate</code></p></div>
+        <% } else { %>
+          <div class="table-desktop">
+            <table class="table text-xs">
+              <thead>
+                <tr>
+                  <th>Waktu</th>
+                  <th>Session</th>
+                  <th>Event</th>
+                  <th>Kode</th>
+                  <th>Alasan</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% sessionEvents.forEach(ev => { %>
+                <tr>
+                  <td class="whitespace-nowrap text-txt-muted"><%= formatLogTime(ev.created_at) %></td>
+                  <td class="font-mono text-txt-primary"><%= ev.session_id %></td>
+                  <td><span class="badge-muted"><%= sessionEventLabel(ev.event) %></span></td>
+                  <td class="text-txt-muted"><%= ev.status_code ?? '—' %></td>
+                  <td class="truncate max-w-[180px]"><%= ev.reason || '—' %></td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <div class="md:hidden divide-y divide-border">
+            <% sessionEvents.forEach(ev => { %>
+            <div class="p-4 space-y-1">
+              <p class="text-xs text-txt-muted"><%= formatLogTime(ev.created_at) %></p>
+              <p class="text-sm font-mono text-txt-primary"><%= ev.session_id %></p>
+              <p class="text-sm"><%= sessionEventLabel(ev.event) %><% if (ev.status_code) { %> · kode <%= ev.status_code %><% } %></p>
+              <% if (ev.reason) { %><p class="text-xs text-txt-muted"><%= ev.reason %></p><% } %>
+            </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (activeLogTab === 'audit') { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Audit API</h2>
+        <p class="card-desc">Permintaan API key, webhook gagal, dan aktivitas sistem.</p>
+      </div>
+      <div class="card-body p-0 sm:p-0">
+        <% if (!auditLogs.length) { %>
+          <div class="empty"><p class="empty-text">Belum ada log audit.</p></div>
+        <% } else { %>
+          <div class="table-desktop">
+            <table class="table text-xs">
+              <thead><tr><th>Waktu</th><th>Kejadian</th><th>Resource</th><th>IP</th></tr></thead>
+              <tbody>
+                <% auditLogs.forEach(log => { %>
+                <tr>
+                  <td class="whitespace-nowrap text-txt-muted"><%= formatLogTime(log.created_at) %></td>
+                  <td><%= auditActionLabel(log.action) %></td>
+                  <td class="truncate max-w-[220px]"><%= log.resource || '—' %></td>
+                  <td class="text-txt-muted"><%= log.ip_address || '—' %></td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+
+    <% if (activeLogTab === 'message') { %>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Log pesan</h2>
+        <p class="card-desc">Event kirim/terima per pesan.</p>
+      </div>
+      <div class="card-body p-0 sm:p-0">
+        <% if (!messageLogs.length) { %>
+          <div class="empty"><p class="empty-text">Belum ada log pesan.</p></div>
+        <% } else { %>
+          <div class="table-desktop">
+            <table class="table text-xs">
+              <thead><tr><th>Waktu</th><th>Session</th><th>Event</th><th>Message ID</th></tr></thead>
+              <tbody>
+                <% messageLogs.forEach(log => { %>
+                <tr>
+                  <td class="whitespace-nowrap text-txt-muted"><%= formatLogTime(log.created_at) %></td>
+                  <td class="font-mono"><%= log.session_id %></td>
+                  <td><span class="badge-muted"><%= log.event %></span></td>
+                  <td class="text-txt-muted"><%= log.message_id ?? '—' %></td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+  </div>
+
+  <%- include('partials/layout-end') %>
+</body>
+</html>

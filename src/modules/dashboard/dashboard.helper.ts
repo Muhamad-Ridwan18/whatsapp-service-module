@@ -9,7 +9,13 @@ import { messageQueue } from '../../services/queue/message-queue.js';
 import { sessionManager } from '../../services/whatsapp/session-manager.js';
 import type { JwtPayload, UserRole } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import { auditActionLabel, sessionStatusLabel } from '../../utils/labels.js';
+import {
+  auditActionLabel,
+  formatLogTime,
+  sessionEventLabel,
+  sessionStatusLabel,
+} from '../../utils/labels.js';
+import { parseJsonField } from '../../utils/json-field.js';
 
 export async function verifyDashboardCookie(
   request: FastifyRequest,
@@ -118,7 +124,7 @@ export async function getDashboardContext(
       name: k.name,
       prefix: k.key_prefix,
       webhook_url: k.webhook_url,
-      permissions: JSON.parse(k.permissions) as string[],
+      permissions: parseJsonField<string[]>(k.permissions, []),
       is_active: k.is_active,
       last_used_at: k.last_used_at,
       created_at: k.created_at,
@@ -131,8 +137,7 @@ export async function getDashboardContext(
     },
     sessions,
     recentMessages: await messageRepository.recent(20),
-    auditLogs: await auditRepository.recent(50),
-    sessionEvents: await sessionEventRepository.recent(undefined, 50),
+    auditLogs: await auditRepository.recentSafe(50),
     users:
       authUser.role === 'super_admin' ? await userRepository.list() : [],
     sessionStatus: {
@@ -150,5 +155,41 @@ export async function getDashboardContext(
     },
     activeTab: 'whatsapp',
     ...extras,
+  };
+}
+
+export async function getLogsContext(
+  authUser: JwtPayload,
+  query: { sessionId?: string; tab?: string },
+) {
+  const sessionId = query.sessionId?.trim() || undefined;
+  const activeLogTab = query.tab === 'audit' || query.tab === 'message' ? query.tab : 'session';
+
+  const [sessionEvents, auditLogs, messageLogs, sessions] = await Promise.all([
+    sessionEventRepository.recentSafe(sessionId, 150),
+    auditRepository.recentSafe(150),
+    messageRepository.recentLogsSafe(150),
+    getSessionsForUser(authUser.sub, authUser.role),
+  ]);
+
+  return {
+    currentUser: {
+      id: authUser.sub,
+      email: authUser.email,
+      role: authUser.role,
+    },
+    title: 'Log',
+    activePage: 'logs',
+    activeLogTab,
+    filterSessionId: sessionId ?? '',
+    sessionEvents,
+    auditLogs,
+    messageLogs,
+    sessions,
+    errorMessage: null,
+    successMessage: null,
+    formatLogTime,
+    sessionEventLabel,
+    auditActionLabel,
   };
 }
