@@ -1,12 +1,7 @@
-export const migrations: { version: number; sql: string }[] = [
+export const sqliteMigrations: { version: number; sql: string }[] = [
   {
     version: 1,
     sql: `
-      CREATE TABLE IF NOT EXISTS migrations (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT NOT NULL UNIQUE,
@@ -122,6 +117,24 @@ export const migrations: { version: number; sql: string }[] = [
         AND (
           SELECT COUNT(*) FROM sessions s2 WHERE s2.user_id = sessions.user_id
         ) = 1;
+    `,
+  },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE IF NOT EXISTS session_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        status_code INTEGER,
+        reason TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_session_events_session ON session_events(session_id);
+      CREATE INDEX IF NOT EXISTS idx_session_events_created ON session_events(created_at);
+      CREATE INDEX IF NOT EXISTS idx_session_events_event ON session_events(event);
     `,
   },
 ];

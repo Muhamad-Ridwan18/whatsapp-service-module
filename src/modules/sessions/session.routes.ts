@@ -19,7 +19,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const body = createSessionSchema.parse(request.body);
     const apiKey = request.apiKey!;
-    const bound = sessionRepository.findByApiKeyId(apiKey.id);
+    const bound = await sessionRepository.findByApiKeyId(apiKey.id);
     if (bound && bound.session_id !== body.sessionId) {
       throw new AppError(
         `API key terikat ke session "${bound.session_id}"`,
@@ -28,7 +28,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const existing = sessionRepository.findBySessionId(body.sessionId);
+    const existing = await sessionRepository.findBySessionId(body.sessionId);
     if (existing?.user_id && existing.user_id !== apiKey.user_id) {
       throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
     }
@@ -66,7 +66,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Sessions'] },
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    assertApiKeySessionAccess(request.apiKey!, sessionId);
+    await assertApiKeySessionAccess(request.apiKey!, sessionId);
     const qr = sessionManager.getQr(sessionId);
     if (!qr) {
       const status = sessionManager.getStatus(sessionId);
@@ -83,7 +83,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Sessions'] },
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    const row = assertApiKeySessionAccess(request.apiKey!, sessionId);
+    const row = await assertApiKeySessionAccess(request.apiKey!, sessionId);
     return sendSuccess(reply, {
       sessionId,
       status: sessionManager.getStatus(sessionId),
@@ -96,7 +96,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/sessions', {
     preHandler: [apiKeyAuth, requirePermission('session:read')],
   }, async (request, reply) => {
-    const sessions = sessionRepository.listByApiKeyId(request.apiKey!.id);
+    const sessions = await sessionRepository.listByApiKeyId(request.apiKey!.id);
     return sendSuccess(reply, sessions);
   });
 
@@ -104,7 +104,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    assertApiKeySessionAccess(request.apiKey!, sessionId);
+    await assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.restart(sessionId);
     return sendSuccess(reply, { status: sessionManager.getStatus(sessionId) });
   });
@@ -113,7 +113,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    assertApiKeySessionAccess(request.apiKey!, sessionId);
+    await assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.disconnect(sessionId);
     return sendSuccess(reply, { status: sessionManager.getStatus(sessionId) });
   });
@@ -122,7 +122,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [apiKeyAuth, requirePermission('session:manage')],
   }, async (request, reply) => {
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    assertApiKeySessionAccess(request.apiKey!, sessionId);
+    await assertApiKeySessionAccess(request.apiKey!, sessionId);
     await sessionManager.deleteSession(sessionId);
     return sendSuccess(reply, { deleted: true });
   });
@@ -135,18 +135,6 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-
-    try {
-      assertDashboardSessionAccess(authUser, sessionId);
-    } catch {
-      socket.send(JSON.stringify({
-        type: 'error',
-        message: 'Session bukan milik akun Anda',
-        status: 'failed',
-      }));
-      socket.close(1008, 'Forbidden');
-      return;
-    }
 
     let lastSentQr: string | null = null;
     let lastSentStatus: string | null = null;
@@ -166,15 +154,30 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       }
     };
 
-    void sessionManager.ensureConnection(sessionId).then(() => {
-      sendSnapshot(true);
-    }).catch(() => {
+    void (async () => {
+      try {
+        await assertDashboardSessionAccess(authUser, sessionId);
+      } catch {
+        socket.send(JSON.stringify({
+          type: 'error',
+          message: 'Session bukan milik akun Anda',
+          status: 'failed',
+        }));
+        socket.close(1008, 'Forbidden');
+        return;
+      }
+
+      try {
+        await sessionManager.ensureConnection(sessionId);
+        sendSnapshot(true);
+      } catch {
       socket.send(JSON.stringify({
         type: 'error',
         message: 'Failed to start session connection',
         status: sessionManager.getStatus(sessionId),
       }));
-    });
+      }
+    })();
 
     const unsubQr = waEventBus.onQr((sid, qr) => {
       if (sid === sessionId) {

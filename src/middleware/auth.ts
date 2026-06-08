@@ -39,7 +39,7 @@ export async function apiKeyAuth(
     ? header.slice(7).trim()
     : header.trim();
   const keyHash = hashApiKey(key);
-  const apiKey = apiKeyRepository.findByHash(keyHash);
+  const apiKey = await apiKeyRepository.findByHash(keyHash);
 
   if (!apiKey) {
     authLogger.warn({ ip: request.ip }, 'Invalid API key');
@@ -54,10 +54,10 @@ export async function apiKeyAuth(
     }
   }
 
-  apiKeyRepository.updateLastUsed(apiKey.id);
+  await apiKeyRepository.updateLastUsed(apiKey.id);
   request.apiKey = apiKey;
 
-  auditRepository.log({
+  void auditRepository.log({
     api_key_id: apiKey.id,
     action: 'api.request',
     resource: request.url,

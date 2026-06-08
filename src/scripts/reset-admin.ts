@@ -37,12 +37,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  db.connect();
+  await db.connect();
   const passwordHash = await hashPassword(password);
 
   if (forceRecreate) {
-    userRepository.deleteAll();
-    userRepository.create({
+    await userRepository.deleteAll();
+    await userRepository.create({
       email,
       password_hash: passwordHash,
       name,
@@ -52,19 +52,20 @@ async function main(): Promise<void> {
     console.log(`  Email   : ${email}`);
     console.log(`  Password: (dari argumen / .env)`);
     console.log(`  Name    : ${name}`);
-    db.close();
+    await db.close();
     return;
   }
 
-  const existing = userRepository.findByEmail(email);
+  const existing = await userRepository.findByEmail(email);
   if (existing) {
-    userRepository.updateAdmin(email, { password_hash: passwordHash, name });
+    await userRepository.updateAdmin(email, { password_hash: passwordHash, name });
     console.log('Password admin berhasil diupdate:');
     console.log(`  Email: ${email}`);
   } else {
-    const superAdmin = userRepository.list().find((u) => u.role === 'super_admin');
+    const users = await userRepository.list();
+    const superAdmin = users.find((u) => u.role === 'super_admin');
     if (superAdmin) {
-      userRepository.updateAdmin(superAdmin.email, {
+      await userRepository.updateAdmin(superAdmin.email, {
         password_hash: passwordHash,
         name,
         new_email: email !== superAdmin.email ? email : undefined,
@@ -72,7 +73,7 @@ async function main(): Promise<void> {
       console.log('Super admin berhasil diupdate:');
       console.log(`  Email: ${email}`);
     } else {
-      userRepository.create({
+      await userRepository.create({
         email,
         password_hash: passwordHash,
         name,
@@ -84,7 +85,7 @@ async function main(): Promise<void> {
   }
 
   console.log('\nLogin dashboard: http://localhost:3000/login');
-  db.close();
+  await db.close();
 }
 
 main().catch((err) => {

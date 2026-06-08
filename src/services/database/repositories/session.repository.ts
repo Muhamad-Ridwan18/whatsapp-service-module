@@ -1,126 +1,110 @@
 import type { SessionRow, SessionStatus } from '../../../types/index.js';
 import { db } from '../index.js';
+import { dbNow } from '../sql.js';
 
 export const sessionRepository = {
-  findBySessionId(sessionId: string): SessionRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM sessions WHERE session_id = ?')
-      .get(sessionId) as SessionRow | undefined;
+  async findBySessionId(sessionId: string): Promise<SessionRow | undefined> {
+    return db.get<SessionRow>('SELECT * FROM sessions WHERE session_id = ?', [sessionId]);
   },
 
-  list(): SessionRow[] {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
-      .all() as SessionRow[];
+  async list(): Promise<SessionRow[]> {
+    return db.all<SessionRow>('SELECT * FROM sessions ORDER BY created_at DESC');
   },
 
-  listByUserId(userId: number): SessionRow[] {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC')
-      .all(userId) as SessionRow[];
+  async listByUserId(userId: number): Promise<SessionRow[]> {
+    return db.all<SessionRow>(
+      'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC',
+      [userId],
+    );
   },
 
-  /** Session yang terikat langsung ke API key (1 key = 1 session). */
-  findByApiKeyId(apiKeyId: number): SessionRow | undefined {
-    return db
-      .getDb()
-      .prepare(
-        'SELECT * FROM sessions WHERE api_key_id = ? ORDER BY created_at DESC LIMIT 1',
-      )
-      .get(apiKeyId) as SessionRow | undefined;
+  async findByApiKeyId(apiKeyId: number): Promise<SessionRow | undefined> {
+    return db.get<SessionRow>(
+      'SELECT * FROM sessions WHERE api_key_id = ? ORDER BY created_at DESC LIMIT 1',
+      [apiKeyId],
+    );
   },
 
-  listByApiKeyId(apiKeyId: number): SessionRow[] {
-    const bound = this.findByApiKeyId(apiKeyId);
+  async listByApiKeyId(apiKeyId: number): Promise<SessionRow[]> {
+    const bound = await this.findByApiKeyId(apiKeyId);
     return bound ? [bound] : [];
   },
 
-  bindApiKey(sessionId: string, apiKeyId: number): void {
-    db.getDb()
-      .prepare(
-        `UPDATE sessions SET api_key_id = ?, updated_at = datetime('now') WHERE session_id = ?`,
-      )
-      .run(apiKeyId, sessionId);
+  async bindApiKey(sessionId: string, apiKeyId: number): Promise<void> {
+    await db.run('UPDATE sessions SET api_key_id = ?, updated_at = ? WHERE session_id = ?', [
+      apiKeyId,
+      dbNow(),
+      sessionId,
+    ]);
   },
 
-  transferApiKeyBindings(fromApiKeyId: number, toApiKeyId: number): void {
-    db.getDb()
-      .prepare(
-        `UPDATE sessions SET api_key_id = ?, updated_at = datetime('now') WHERE api_key_id = ?`,
-      )
-      .run(toApiKeyId, fromApiKeyId);
+  async transferApiKeyBindings(fromApiKeyId: number, toApiKeyId: number): Promise<void> {
+    await db.run(
+      'UPDATE sessions SET api_key_id = ?, updated_at = ? WHERE api_key_id = ?',
+      [toApiKeyId, dbNow(), fromApiKeyId],
+    );
   },
 
-  count(): number {
-    const row = db.getDb().prepare('SELECT COUNT(*) as c FROM sessions').get() as {
-      c: number;
-    };
-    return row.c;
+  async count(): Promise<number> {
+    const row = await db.get<{ c: number }>('SELECT COUNT(*) as c FROM sessions');
+    return row?.c ?? 0;
   },
 
-  countByStatus(status: SessionStatus): number {
-    const row = db
-      .getDb()
-      .prepare('SELECT COUNT(*) as c FROM sessions WHERE status = ?')
-      .get(status) as { c: number };
-    return row.c;
+  async countByStatus(status: SessionStatus): Promise<number> {
+    const row = await db.get<{ c: number }>(
+      'SELECT COUNT(*) as c FROM sessions WHERE status = ?',
+      [status],
+    );
+    return row?.c ?? 0;
   },
 
-  findByPhoneNumber(phoneNumber: string): SessionRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM sessions WHERE phone_number = ?')
-      .get(phoneNumber) as SessionRow | undefined;
+  async findByPhoneNumber(phoneNumber: string): Promise<SessionRow | undefined> {
+    return db.get<SessionRow>('SELECT * FROM sessions WHERE phone_number = ?', [phoneNumber]);
   },
 
-  create(data: {
+  async create(data: {
     session_id: string;
     user_id?: number | null;
     api_key_id?: number | null;
     status?: SessionStatus;
     phone_number?: string | null;
-  }): number {
-    const result = db
-      .getDb()
-      .prepare(
-        `INSERT INTO sessions (session_id, user_id, api_key_id, status, phone_number) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
+  }): Promise<number> {
+    const result = await db.run(
+      `INSERT INTO sessions (session_id, user_id, api_key_id, status, phone_number) VALUES (?, ?, ?, ?, ?)`,
+      [
         data.session_id,
         data.user_id ?? null,
         data.api_key_id ?? null,
         data.status ?? 'initializing',
         data.phone_number ?? null,
-      );
-    return Number(result.lastInsertRowid);
+      ],
+    );
+    return result.lastInsertRowid;
   },
 
-  setPhoneNumber(sessionId: string, phoneNumber: string): void {
-    db.getDb()
-      .prepare(
-        `UPDATE sessions SET phone_number = ?, updated_at = datetime('now') WHERE session_id = ?`,
-      )
-      .run(phoneNumber, sessionId);
+  async setPhoneNumber(sessionId: string, phoneNumber: string): Promise<void> {
+    await db.run('UPDATE sessions SET phone_number = ?, updated_at = ? WHERE session_id = ?', [
+      phoneNumber,
+      dbNow(),
+      sessionId,
+    ]);
   },
 
-  setOwner(sessionId: string, userId: number): void {
-    db.getDb()
-      .prepare(
-        `UPDATE sessions SET user_id = ?, updated_at = datetime('now') WHERE session_id = ?`,
-      )
-      .run(userId, sessionId);
+  async setOwner(sessionId: string, userId: number): Promise<void> {
+    await db.run('UPDATE sessions SET user_id = ?, updated_at = ? WHERE session_id = ?', [
+      userId,
+      dbNow(),
+      sessionId,
+    ]);
   },
 
-  updateStatus(
+  async updateStatus(
     sessionId: string,
     status: SessionStatus,
     extra?: { phone_number?: string; display_name?: string },
-  ): void {
-    const sets = ['status = ?', "updated_at = datetime('now')"];
-    const params: (string | null)[] = [status];
+  ): Promise<void> {
+    const sets = ['status = ?', 'updated_at = ?'];
+    const params: (string | null)[] = [status, dbNow()];
 
     if (extra?.phone_number) {
       sets.push('phone_number = ?');
@@ -131,16 +115,15 @@ export const sessionRepository = {
       params.push(extra.display_name);
     }
     if (status === 'connected') {
-      sets.push("last_connected_at = datetime('now')");
+      sets.push('last_connected_at = ?');
+      params.push(dbNow());
     }
 
     params.push(sessionId);
-    db.getDb()
-      .prepare(`UPDATE sessions SET ${sets.join(', ')} WHERE session_id = ?`)
-      .run(...params);
+    await db.run(`UPDATE sessions SET ${sets.join(', ')} WHERE session_id = ?`, params);
   },
 
-  delete(sessionId: string): void {
-    db.getDb().prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId);
+  async delete(sessionId: string): Promise<void> {
+    await db.run('DELETE FROM sessions WHERE session_id = ?', [sessionId]);
   },
 };

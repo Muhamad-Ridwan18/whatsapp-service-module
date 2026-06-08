@@ -9,11 +9,11 @@ export function canApiKeyAccessSession(
   return session.api_key_id === apiKey.id;
 }
 
-export function assertApiKeySessionAccess(
+export async function assertApiKeySessionAccess(
   apiKey: ApiKeyRow,
   sessionId: string,
-): SessionRow {
-  const session = sessionRepository.findBySessionId(sessionId);
+): Promise<SessionRow> {
+  const session = await sessionRepository.findBySessionId(sessionId);
   if (!session) {
     throw new AppError('Session tidak ditemukan', ERR.SESSION_NOT_FOUND, 404);
   }

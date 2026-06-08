@@ -25,22 +25,20 @@ class WebhookService {
     return WebhookService.instance;
   }
 
-  private getKeysForSession(sessionId: string): ApiKeyRow[] {
-    const session = sessionRepository.findBySessionId(sessionId);
+  private async getKeysForSession(sessionId: string): Promise<ApiKeyRow[]> {
+    const session = await sessionRepository.findBySessionId(sessionId);
     if (!session) return [];
 
-    return db
-      .getDb()
-      .prepare(
-        `SELECT * FROM api_keys
-         WHERE is_active = 1
-           AND webhook_url IS NOT NULL
-           AND (
-             id = ?
-             OR user_id = ?
-           )`,
-      )
-      .all(session.api_key_id ?? -1, session.user_id ?? -1) as ApiKeyRow[];
+    return db.all<ApiKeyRow>(
+      `SELECT * FROM api_keys
+       WHERE is_active = 1
+         AND webhook_url IS NOT NULL
+         AND (
+           id = ?
+           OR user_id = ?
+         )`,
+      [session.api_key_id ?? -1, session.user_id ?? -1],
+    );
   }
 
   async dispatch(
@@ -48,7 +46,7 @@ class WebhookService {
     sessionId: string,
     data: Record<string, unknown>,
   ): Promise<void> {
-    const keys = this.getKeysForSession(sessionId);
+    const keys = await this.getKeysForSession(sessionId);
 
     for (const key of keys) {
       let events: WebhookEvent[] = [];
@@ -117,7 +115,7 @@ class WebhookService {
       }
     }
 
-    auditRepository.log({
+    void auditRepository.log({
       api_key_id: apiKeyId,
       action: 'webhook.failed',
       resource: url,

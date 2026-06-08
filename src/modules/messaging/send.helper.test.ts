@@ -22,18 +22,18 @@ describe('resolveSessionForApiKey', () => {
     vi.clearAllMocks();
   });
 
-  it('returns session bound to API key', () => {
-    findByApiKeyId.mockReturnValue({ session_id: 'wa-628111' } as SessionRow);
-    expect(resolveSessionForApiKey(apiKey)).toBe('wa-628111');
+  it('returns session bound to API key', async () => {
+    findByApiKeyId.mockResolvedValue({ session_id: 'wa-628111' } as SessionRow);
+    await expect(resolveSessionForApiKey(apiKey)).resolves.toBe('wa-628111');
   });
 
-  it('auto-binds single unbound user session', () => {
-    findByApiKeyId.mockReturnValue(undefined);
-    listByUserId.mockReturnValue([
+  it('auto-binds single unbound user session', async () => {
+    findByApiKeyId.mockResolvedValue(undefined);
+    listByUserId.mockResolvedValue([
       { session_id: 'wa-628222', api_key_id: null },
     ] as SessionRow[]);
 
-    expect(resolveSessionForApiKey(apiKey)).toBe('wa-628222');
+    await expect(resolveSessionForApiKey(apiKey)).resolves.toBe('wa-628222');
     expect(bindApiKey).toHaveBeenCalledWith('wa-628222', 10);
   });
 });
@@ -41,11 +41,11 @@ describe('resolveSessionForApiKey', () => {
 describe('parseSendRequestBody', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    findByApiKeyId.mockReturnValue({ session_id: 'wa-628111' } as SessionRow);
+    findByApiKeyId.mockResolvedValue({ session_id: 'wa-628111' } as SessionRow);
   });
 
-  it('parses Fonnte-style payload without sessionId', () => {
-    const result = parseSendRequestBody(
+  it('parses Fonnte-style payload without sessionId', async () => {
+    const result = await parseSendRequestBody(
       {
         target: '08123456789',
         countryCode: '62',
@@ -57,12 +57,12 @@ describe('parseSendRequestBody', () => {
     expect(result.to).toBe('628123456789');
   });
 
-  it('rejects sessionId that does not match API key', () => {
-    expect(() =>
+  it('rejects sessionId that does not match API key', async () => {
+    await expect(
       parseSendRequestBody(
         { sessionId: 'wa-other', target: '08111', countryCode: '62', message: 'x' },
         apiKey,
       ),
-    ).toThrow('sessionId tidak cocok');
+    ).rejects.toThrow('sessionId tidak cocok');
   });
 });

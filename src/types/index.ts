@@ -80,6 +80,16 @@ export interface SessionRow {
   updated_at: string;
 }
 
+export interface SessionEventRow {
+  id: number;
+  session_id: string;
+  event: string;
+  status_code: number | null;
+  reason: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
 export interface MessageRow {
   id: number;
   session_id: string;

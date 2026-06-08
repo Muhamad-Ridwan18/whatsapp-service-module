@@ -33,7 +33,15 @@ export const config = {
     .filter(Boolean),
 
   database: {
+    driver: (process.env.DB_DRIVER ?? 'sqlite') as 'sqlite' | 'mysql',
     path: path.resolve(root, process.env.DATABASE_PATH ?? 'storage/database.sqlite'),
+    mysql: {
+      host: process.env.MYSQL_HOST ?? '127.0.0.1',
+      port: parseInt(process.env.MYSQL_PORT ?? '3306', 10),
+      user: process.env.MYSQL_USER ?? 'root',
+      password: process.env.MYSQL_PASSWORD ?? '',
+      database: process.env.MYSQL_DATABASE ?? 'whatsapp_service',
+    },
   },
 
   whatsapp: {

@@ -15,6 +15,7 @@ import type { MessagePayload, SessionStatus } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
 import { formatDisplayPhone } from '../../utils/phone.js';
 import { sessionRepository } from '../database/repositories/session.repository.js';
+import { sessionEventRepository } from '../database/repositories/session-event.repository.js';
 import { messageRepository } from '../database/repositories/message.repository.js';
 import { waLogger } from '../logger/index.js';
 import { waEventBus } from './event-bus.js';
@@ -35,6 +36,7 @@ interface SessionInstance {
 class SessionManager {
   private static instance: SessionManager;
   private sessions = new Map<string, SessionInstance>();
+  private statusCache = new Map<string, SessionStatus>();
 
   private constructor() {}
 
@@ -57,10 +59,13 @@ class SessionManager {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
 
-    const dbSessions = sessionRepository.list();
+    const dbSessions = await sessionRepository.list();
+    for (const session of dbSessions) {
+      this.statusCache.set(session.session_id, session.status);
+    }
 
     for (const folder of authFolders) {
-      if (!sessionRepository.findBySessionId(folder)) {
+      if (!(await sessionRepository.findBySessionId(folder))) {
         const orphanPath = path.join(authDir, folder);
         waLogger.warn({ sessionId: folder }, 'Folder auth yatim — dibersihkan (session sudah dihapus)');
         try {
@@ -81,7 +86,7 @@ class SessionManager {
   }
 
   async ensureConnection(sessionId: string, phoneNumber?: string): Promise<void> {
-    const existing = sessionRepository.findBySessionId(sessionId);
+    const existing = await sessionRepository.findBySessionId(sessionId);
     const inst = this.sessions.get(sessionId);
     const status = this.getStatus(sessionId);
 
@@ -89,7 +94,7 @@ class SessionManager {
     if (inst?.isConnecting) return;
 
     if (!existing) {
-      sessionRepository.create({
+      await sessionRepository.create({
         session_id: sessionId,
         status: 'initializing',
         phone_number: phoneNumber ?? null,
@@ -119,7 +124,7 @@ class SessionManager {
     const phoneNumber = options?.phoneNumber;
 
     if (phoneNumber) {
-      const byPhone = sessionRepository.findByPhoneNumber(phoneNumber);
+      const byPhone = await sessionRepository.findByPhoneNumber(phoneNumber);
       if (byPhone && byPhone.session_id !== sessionId) {
         if (
           options?.userId &&
@@ -140,7 +145,7 @@ class SessionManager {
       }
     }
 
-    const existingBeforeCreate = sessionRepository.findBySessionId(sessionId);
+    const existingBeforeCreate = await sessionRepository.findBySessionId(sessionId);
     if (existingBeforeCreate?.user_id && options?.userId &&
         existingBeforeCreate.user_id !== options.userId) {
       throw new AppError('Session milik akun lain', ERR.FORBIDDEN, 403);
@@ -162,26 +167,26 @@ class SessionManager {
         this.sessions.delete(sessionId);
       } else {
         if (options?.userId && !existingBeforeCreate.user_id) {
-          sessionRepository.setOwner(sessionId, options.userId);
+          await sessionRepository.setOwner(sessionId, options.userId);
         }
         if (options?.apiKeyId) {
-          sessionRepository.bindApiKey(sessionId, options.apiKeyId);
+          await sessionRepository.bindApiKey(sessionId, options.apiKeyId);
         }
         if (phoneNumber) {
-          sessionRepository.setPhoneNumber(sessionId, phoneNumber);
+          await sessionRepository.setPhoneNumber(sessionId, phoneNumber);
         }
         await this.restart(sessionId);
         return;
       }
     }
 
-    if (sessionRepository.count() >= config.whatsapp.maxSessions) {
+    if ((await sessionRepository.count()) >= config.whatsapp.maxSessions) {
       throw new AppError('Maximum sessions reached', ERR.SESSION_LIMIT, 403);
     }
 
-    const existing = sessionRepository.findBySessionId(sessionId);
+    const existing = await sessionRepository.findBySessionId(sessionId);
     if (!existing) {
-      sessionRepository.create({
+      await sessionRepository.create({
         session_id: sessionId,
         api_key_id: options?.apiKeyId ?? null,
         user_id: options?.userId ?? null,
@@ -190,13 +195,13 @@ class SessionManager {
       });
     } else {
       if (options?.userId && !existing.user_id) {
-        sessionRepository.setOwner(sessionId, options.userId);
+        await sessionRepository.setOwner(sessionId, options.userId);
       }
       if (options?.apiKeyId && existing.api_key_id !== options.apiKeyId) {
-        sessionRepository.bindApiKey(sessionId, options.apiKeyId);
+        await sessionRepository.bindApiKey(sessionId, options.apiKeyId);
       }
       if (phoneNumber) {
-        sessionRepository.setPhoneNumber(sessionId, phoneNumber);
+        await sessionRepository.setPhoneNumber(sessionId, phoneNumber);
       }
     }
 
@@ -209,10 +214,12 @@ class SessionManager {
     return p;
   }
 
-  private setStatus(sessionId: string, status: SessionStatus, extra?: {
-    phone_number?: string;
-    display_name?: string;
-  }): void {
+  private setStatus(
+    sessionId: string,
+    status: SessionStatus,
+    extra?: { phone_number?: string; display_name?: string },
+    eventMeta?: { status_code?: number | null; reason?: string | null },
+  ): void {
     const inst = this.sessions.get(sessionId) ?? {
       socket: null,
       status: 'initializing' as SessionStatus,
@@ -223,7 +230,15 @@ class SessionManager {
     };
     inst.status = status;
     this.sessions.set(sessionId, inst);
-    sessionRepository.updateStatus(sessionId, status, extra);
+    this.statusCache.set(sessionId, status);
+    void sessionRepository.updateStatus(sessionId, status, extra);
+    void sessionEventRepository.log({
+      session_id: sessionId,
+      event: status,
+      status_code: eventMeta?.status_code ?? null,
+      reason: eventMeta?.reason ?? null,
+      metadata: extra ?? null,
+    });
     waEventBus.emitStatus(sessionId, status);
     waEventBus.emitLog(sessionId, `Status: ${status}`);
   }
@@ -326,6 +341,13 @@ class SessionManager {
 
           void webhookService.dispatch('session.disconnected', sessionId, {
             reason: statusCode,
+          });
+          void sessionEventRepository.log({
+            session_id: sessionId,
+            event: 'connection_close',
+            status_code: statusCode ?? null,
+            reason: statusCode != null ? String(statusCode) : null,
+            metadata: { phase: inst!.status },
           });
 
           if (statusCode === DisconnectReason.loggedOut) {
@@ -443,7 +465,7 @@ class SessionManager {
       msg.message.extendedTextMessage?.text ??
       '[media]';
 
-    const dbId = messageRepository.create({
+    const dbId = await messageRepository.create({
       session_id: sessionId,
       message_id: msg.key.id ?? null,
       direction: 'inbound',
@@ -454,7 +476,7 @@ class SessionManager {
       status: 'received',
     });
 
-    messageRepository.log(dbId, sessionId, 'received', { content });
+    await messageRepository.log(dbId, sessionId, 'received', { content });
 
     void webhookService.dispatch('message.received', sessionId, {
       from: formatDisplayPhone(from),
@@ -467,7 +489,7 @@ class SessionManager {
   getStatus(sessionId: string): SessionStatus {
     return (
       this.sessions.get(sessionId)?.status ??
-      sessionRepository.findBySessionId(sessionId)?.status ??
+      this.statusCache.get(sessionId) ??
       'disconnected'
     );
   }
@@ -567,7 +589,7 @@ class SessionManager {
     }
 
     const messageId = result.key.id ?? `local-${Date.now()}`;
-    const dbId = messageRepository.create({
+    const dbId = await messageRepository.create({
       session_id: sessionId,
       message_id: messageId,
       direction: 'outbound',
@@ -578,7 +600,7 @@ class SessionManager {
       status: 'sent',
     });
 
-    messageRepository.log(dbId, sessionId, 'sent');
+    await messageRepository.log(dbId, sessionId, 'sent');
     void webhookService.dispatch('message.sent', sessionId, {
       to,
       messageId,
@@ -641,7 +663,8 @@ class SessionManager {
     }
 
     this.sessions.delete(sessionId);
-    sessionRepository.delete(sessionId);
+    this.statusCache.delete(sessionId);
+    await sessionRepository.delete(sessionId);
     this.removeAuthFiles(sessionId);
 
     waLogger.info({ sessionId }, 'Session dihapus (DB + folder auth)');
@@ -652,10 +675,9 @@ class SessionManager {
     for (const [id, inst] of this.sessions) {
       result[id] = inst.status;
     }
-    const dbSessions = sessionRepository.list();
-    for (const s of dbSessions) {
-      if (!result[s.session_id]) {
-        result[s.session_id] = s.status;
+    for (const [id, status] of this.statusCache) {
+      if (!result[id]) {
+        result[id] = status;
       }
     }
     return result;

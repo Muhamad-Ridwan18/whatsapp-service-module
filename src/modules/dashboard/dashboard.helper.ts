@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { apiKeyRepository } from '../../services/database/repositories/api-key.repository.js';
 import { auditRepository } from '../../services/database/repositories/audit.repository.js';
 import { messageRepository } from '../../services/database/repositories/message.repository.js';
+import { sessionEventRepository } from '../../services/database/repositories/session-event.repository.js';
 import { sessionRepository } from '../../services/database/repositories/session.repository.js';
 import { userRepository } from '../../services/database/repositories/user.repository.js';
 import { messageQueue } from '../../services/queue/message-queue.js';
@@ -66,11 +67,11 @@ export function canDashboardAccessSession(
   return session.user_id === authUser.sub;
 }
 
-export function assertDashboardSessionAccess(
+export async function assertDashboardSessionAccess(
   authUser: JwtPayload,
   sessionId: string,
 ) {
-  const session = sessionRepository.findBySessionId(sessionId);
+  const session = await sessionRepository.findBySessionId(sessionId);
   if (!session) {
     throw new AppError('Session tidak ditemukan', ERR.SESSION_NOT_FOUND, 404);
   }
@@ -84,19 +85,22 @@ export function assertDashboardSessionAccess(
   return session;
 }
 
-export function getSessionsForUser(userId: number, role: UserRole) {
+export async function getSessionsForUser(userId: number, role: UserRole) {
   if (isDashboardAdmin(role)) {
     return sessionRepository.list();
   }
   return sessionRepository.listByUserId(userId);
 }
 
-export function getDashboardContext(authUser: JwtPayload, extras?: Record<string, unknown>) {
-  const sessions = getSessionsForUser(authUser.sub, authUser.role);
+export async function getDashboardContext(
+  authUser: JwtPayload,
+  extras?: Record<string, unknown>,
+) {
+  const sessions = await getSessionsForUser(authUser.sub, authUser.role);
   const apiKeys =
     authUser.role === 'super_admin'
-      ? apiKeyRepository.listAll()
-      : apiKeyRepository.findByUserId(authUser.sub);
+      ? await apiKeyRepository.listAll()
+      : await apiKeyRepository.findByUserId(authUser.sub);
 
   return {
     currentUser: {
@@ -122,14 +126,15 @@ export function getDashboardContext(authUser: JwtPayload, extras?: Record<string
     stats: {
       totalSessions: sessions.length,
       connected: sessionManager.getConnectedCount(),
-      messagesToday: messageRepository.countToday(),
+      messagesToday: await messageRepository.countToday(),
       queue: messageQueue.getStats(),
     },
     sessions,
-    recentMessages: messageRepository.recent(20),
-    auditLogs: auditRepository.recent(50),
+    recentMessages: await messageRepository.recent(20),
+    auditLogs: await auditRepository.recent(50),
+    sessionEvents: await sessionEventRepository.recent(undefined, 50),
     users:
-      authUser.role === 'super_admin' ? userRepository.list() : [],
+      authUser.role === 'super_admin' ? await userRepository.list() : [],
     sessionStatus: {
       connected: sessionStatusLabel('connected'),
       qr_ready: sessionStatusLabel('qr_ready'),

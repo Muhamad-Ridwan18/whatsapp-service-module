@@ -23,7 +23,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     },
   }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
-    const user = userRepository.findByEmail(body.email);
+    const user = await userRepository.findByEmail(body.email);
 
     if (!user || !(await verifyPassword(body.password, user.password_hash))) {
       throw new AppError('Invalid credentials', ERR.UNAUTHORIZED, 401);
@@ -51,7 +51,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Auth'] },
   }, async (request, reply) => {
     const body = createApiKeySchema.parse(request.body);
-    const result = createApiKeyForUser(request.authUser!.sub, {
+    const result = await createApiKeyForUser(request.authUser!.sub, {
       name: body.name,
       permissions: body.permissions,
       webhook_url: body.webhook_url,
@@ -71,7 +71,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/auth/api-keys', {
     preHandler: [jwtAuth],
   }, async (request, reply) => {
-    const keys = apiKeyRepository.findByUserId(request.authUser!.sub);
+    const keys = await apiKeyRepository.findByUserId(request.authUser!.sub);
     return sendSuccess(reply, keys.map((k) => ({
       id: k.id,
       name: k.name,
@@ -89,13 +89,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     schema: { tags: ['Auth'] },
   }, async (request, reply) => {
     const id = parseInt((request.params as { id: string }).id, 10);
-    const key = apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
+    const key = await apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
 
     if (!key) {
       throw new AppError('API key not found', ERR.NOT_FOUND, 404);
     }
 
-    apiKeyRepository.deactivate(id);
+    await apiKeyRepository.deactivate(id);
     return sendSuccess(reply, { revoked: true });
   });
 }

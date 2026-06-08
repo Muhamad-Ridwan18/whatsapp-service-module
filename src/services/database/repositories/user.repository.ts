@@ -1,63 +1,52 @@
 import type { UserRole, UserRow } from '../../../types/index.js';
 import { db } from '../index.js';
+import { dbNow } from '../sql.js';
 
 export const userRepository = {
-  findByEmail(email: string): UserRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM users WHERE email = ? AND is_active = 1')
-      .get(email) as UserRow | undefined;
+  async findByEmail(email: string): Promise<UserRow | undefined> {
+    return db.get<UserRow>('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
   },
 
-  findById(id: number): UserRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM users WHERE id = ?')
-      .get(id) as UserRow | undefined;
+  async findById(id: number): Promise<UserRow | undefined> {
+    return db.get<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
   },
 
-  count(): number {
-    const row = db.getDb().prepare('SELECT COUNT(*) as c FROM users').get() as {
-      c: number;
-    };
-    return row.c;
+  async count(): Promise<number> {
+    const row = await db.get<{ c: number }>('SELECT COUNT(*) as c FROM users');
+    return row?.c ?? 0;
   },
 
-  create(data: {
+  async create(data: {
     email: string;
     password_hash: string;
     name: string;
     role: UserRole;
-  }): number {
-    const result = db
-      .getDb()
-      .prepare(
-        `INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)`,
-      )
-      .run(data.email, data.password_hash, data.name, data.role);
-    return Number(result.lastInsertRowid);
+  }): Promise<number> {
+    const result = await db.run(
+      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
+      [data.email, data.password_hash, data.name, data.role],
+    );
+    return result.lastInsertRowid;
   },
 
-  list(): UserRow[] {
-    return db.getDb().prepare('SELECT * FROM users ORDER BY id').all() as UserRow[];
+  async list(): Promise<UserRow[]> {
+    return db.all<UserRow>('SELECT * FROM users ORDER BY id');
   },
 
-  updatePassword(email: string, passwordHash: string): boolean {
-    const result = db
-      .getDb()
-      .prepare(
-        `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?`,
-      )
-      .run(passwordHash, email);
+  async updatePassword(email: string, passwordHash: string): Promise<boolean> {
+    const result = await db.run(
+      'UPDATE users SET password_hash = ?, updated_at = ? WHERE email = ?',
+      [passwordHash, dbNow(), email],
+    );
     return result.changes > 0;
   },
 
-  updateAdmin(
+  async updateAdmin(
     email: string,
     data: { password_hash?: string; name?: string; new_email?: string },
-  ): boolean {
-    const sets: string[] = ["updated_at = datetime('now')"];
-    const params: string[] = [];
+  ): Promise<boolean> {
+    const sets: string[] = ['updated_at = ?'];
+    const params: string[] = [dbNow()];
 
     if (data.password_hash) {
       sets.push('password_hash = ?');
@@ -73,29 +62,24 @@ export const userRepository = {
     }
 
     params.push(email);
-    const result = db
-      .getDb()
-      .prepare(`UPDATE users SET ${sets.join(', ')} WHERE email = ?`)
-      .run(...params);
+    const result = await db.run(`UPDATE users SET ${sets.join(', ')} WHERE email = ?`, params);
     return result.changes > 0;
   },
 
-  deleteAll(): void {
-    db.getDb().prepare('DELETE FROM users').run();
+  async deleteAll(): Promise<void> {
+    await db.run('DELETE FROM users');
   },
 
-  deactivate(id: number): void {
-    db.getDb()
-      .prepare(`UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?`)
-      .run(id);
+  async deactivate(id: number): Promise<void> {
+    await db.run('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?', [dbNow(), id]);
   },
 
-  createClient(data: {
+  async createClient(data: {
     email: string;
     password_hash: string;
     name: string;
     role?: UserRole;
-  }): number {
+  }): Promise<number> {
     return this.create({
       email: data.email,
       password_hash: data.password_hash,

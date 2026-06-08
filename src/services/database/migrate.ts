@@ -1,5 +1,9 @@
 import { db } from './index.js';
 
-db.connect();
-console.log('Migrations completed successfully.');
-db.close();
+async function main(): Promise<void> {
+  await db.connect();
+  console.log('Migrations completed successfully.');
+  await db.close();
+}
+
+void main();

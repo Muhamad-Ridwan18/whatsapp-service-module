@@ -30,13 +30,13 @@ async function handleSendMessage(
   reply: FastifyReply,
 ): Promise<FastifyReply> {
   const { body: rawBody, file } = await readSendRequest(request);
-  const body = parseSendRequestBody(
+  const body = await parseSendRequestBody(
     normalizeUrlFields(rawBody),
     request.apiKey!,
     file,
   );
 
-  assertApiKeySessionAccess(request.apiKey!, body.sessionId);
+  await assertApiKeySessionAccess(request.apiKey!, body.sessionId);
 
   const jobId = messageQueue.enqueue(
     body.sessionId,
@@ -82,8 +82,8 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       messages: z.array(z.unknown()).min(1).max(100),
     }).parse(request.body);
 
-    const messages = rawMessages.map((msg) =>
-      parseSendRequestBody(msg, request.apiKey!),
+    const messages = await Promise.all(
+      rawMessages.map((msg) => parseSendRequestBody(msg, request.apiKey!)),
     );
 
     const jobIds = messageQueue.enqueueBulk(

@@ -6,7 +6,7 @@ import { sessionManager } from './services/whatsapp/session-manager.js';
 import { logger } from './services/logger/index.js';
 
 async function start(): Promise<void> {
-  db.connect();
+  await db.connect();
   await bootstrap();
 
   const app = await buildApp();
@@ -24,7 +24,7 @@ async function start(): Promise<void> {
 
 const shutdown = async (signal: string) => {
   logger.info({ signal }, 'Shutting down');
-  db.close();
+  await db.close();
   process.exit(0);
 };
 

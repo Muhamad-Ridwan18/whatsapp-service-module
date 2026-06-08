@@ -26,7 +26,7 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       uptime: `${Math.floor(process.uptime())}s`,
       sessions: sessionManager.listSessions(),
       stats: {
-        total: sessionRepository.count(),
+        total: await sessionRepository.count(),
         connected: sessionManager.getConnectedCount(),
         queue: messageQueue.getStats(),
       },

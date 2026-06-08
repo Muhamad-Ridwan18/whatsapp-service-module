@@ -25,17 +25,17 @@ function pickString(raw: Record<string, unknown>, ...keys: string[]): string | u
 }
 
 /** Session untuk API key — 1 key = 1 session, tanpa perlu kirim sessionId. */
-export function resolveSessionForApiKey(apiKey: ApiKeyRow): string {
-  const bound = sessionRepository.findByApiKeyId(apiKey.id);
+export async function resolveSessionForApiKey(apiKey: ApiKeyRow): Promise<string> {
+  const bound = await sessionRepository.findByApiKeyId(apiKey.id);
   if (bound) {
     return bound.session_id;
   }
 
-  const userSessions = sessionRepository.listByUserId(apiKey.user_id);
+  const userSessions = await sessionRepository.listByUserId(apiKey.user_id);
   const unbound = userSessions.filter((s) => s.api_key_id == null);
 
   if (unbound.length === 1) {
-    sessionRepository.bindApiKey(unbound[0].session_id, apiKey.id);
+    await sessionRepository.bindApiKey(unbound[0].session_id, apiKey.id);
     return unbound[0].session_id;
   }
 
@@ -54,16 +54,16 @@ export function resolveSessionForApiKey(apiKey: ApiKeyRow): string {
   );
 }
 
-export function parseSendRequestBody(
+export async function parseSendRequestBody(
   input: unknown,
   apiKey: ApiKeyRow,
   file?: SendFileAttachment,
-): ParsedSendMessage {
+): Promise<ParsedSendMessage> {
   const raw = (input && typeof input === 'object')
     ? (input as Record<string, unknown>)
     : {};
 
-  const boundSessionId = resolveSessionForApiKey(apiKey);
+  const boundSessionId = await resolveSessionForApiKey(apiKey);
   const requested = pickString(raw, 'sessionId', 'session');
 
   if (requested && requested !== boundSessionId) {

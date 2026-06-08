@@ -1,66 +1,60 @@
 import type { ApiKeyRow } from '../../../types/index.js';
 import { db } from '../index.js';
+import { dbNow } from '../sql.js';
 
 export const apiKeyRepository = {
-  findByHash(keyHash: string): ApiKeyRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1')
-      .get(keyHash) as ApiKeyRow | undefined;
+  async findByHash(keyHash: string): Promise<ApiKeyRow | undefined> {
+    return db.get<ApiKeyRow>(
+      'SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1',
+      [keyHash],
+    );
   },
 
-  findById(id: number): ApiKeyRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys WHERE id = ?')
-      .get(id) as ApiKeyRow | undefined;
+  async findById(id: number): Promise<ApiKeyRow | undefined> {
+    return db.get<ApiKeyRow>('SELECT * FROM api_keys WHERE id = ?', [id]);
   },
 
-  findByUserId(userId: number): ApiKeyRow[] {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys WHERE user_id = ? ORDER BY id DESC')
-      .all(userId) as ApiKeyRow[];
+  async findByUserId(userId: number): Promise<ApiKeyRow[]> {
+    return db.all<ApiKeyRow>(
+      'SELECT * FROM api_keys WHERE user_id = ? ORDER BY id DESC',
+      [userId],
+    );
   },
 
-  findActiveByUserId(userId: number): ApiKeyRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys WHERE user_id = ? AND is_active = 1 LIMIT 1')
-      .get(userId) as ApiKeyRow | undefined;
+  async findActiveByUserId(userId: number): Promise<ApiKeyRow | undefined> {
+    return db.get<ApiKeyRow>(
+      'SELECT * FROM api_keys WHERE user_id = ? AND is_active = 1 LIMIT 1',
+      [userId],
+    );
   },
 
-  countActiveByUserId(userId: number): number {
-    const row = db
-      .getDb()
-      .prepare('SELECT COUNT(*) as c FROM api_keys WHERE user_id = ? AND is_active = 1')
-      .get(userId) as { c: number };
-    return row.c;
+  async countActiveByUserId(userId: number): Promise<number> {
+    const row = await db.get<{ c: number }>(
+      'SELECT COUNT(*) as c FROM api_keys WHERE user_id = ? AND is_active = 1',
+      [userId],
+    );
+    return row?.c ?? 0;
   },
 
-  deactivateAllByUserId(userId: number): void {
-    db.getDb()
-      .prepare(
-        `UPDATE api_keys SET is_active = 0, updated_at = datetime('now') WHERE user_id = ? AND is_active = 1`,
-      )
-      .run(userId);
+  async deactivateAllByUserId(userId: number): Promise<void> {
+    await db.run(
+      'UPDATE api_keys SET is_active = 0, updated_at = ? WHERE user_id = ? AND is_active = 1',
+      [dbNow(), userId],
+    );
   },
 
-  listAll(): ApiKeyRow[] {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys ORDER BY id DESC')
-      .all() as ApiKeyRow[];
+  async listAll(): Promise<ApiKeyRow[]> {
+    return db.all<ApiKeyRow>('SELECT * FROM api_keys ORDER BY id DESC');
   },
 
-  findByIdAndUserId(id: number, userId: number): ApiKeyRow | undefined {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM api_keys WHERE id = ? AND user_id = ?')
-      .get(id, userId) as ApiKeyRow | undefined;
+  async findByIdAndUserId(id: number, userId: number): Promise<ApiKeyRow | undefined> {
+    return db.get<ApiKeyRow>(
+      'SELECT * FROM api_keys WHERE id = ? AND user_id = ?',
+      [id, userId],
+    );
   },
 
-  create(data: {
+  async create(data: {
     user_id: number;
     key_hash: string;
     key_prefix: string;
@@ -69,14 +63,11 @@ export const apiKeyRepository = {
     webhook_url?: string | null;
     webhook_events?: string;
     ip_whitelist?: string | null;
-  }): number {
-    const result = db
-      .getDb()
-      .prepare(
-        `INSERT INTO api_keys (user_id, key_hash, key_prefix, name, permissions, webhook_url, webhook_events, ip_whitelist)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+  }): Promise<number> {
+    const result = await db.run(
+      `INSERT INTO api_keys (user_id, key_hash, key_prefix, name, permissions, webhook_url, webhook_events, ip_whitelist)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         data.user_id,
         data.key_hash,
         data.key_prefix,
@@ -86,23 +77,23 @@ export const apiKeyRepository = {
         data.webhook_events ??
           '["message.received","message.sent","session.connected","session.disconnected"]',
         data.ip_whitelist ?? null,
-      );
-    return Number(result.lastInsertRowid);
+      ],
+    );
+    return result.lastInsertRowid;
   },
 
-  updateLastUsed(id: number): void {
-    db.getDb()
-      .prepare(`UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?`)
-      .run(id);
+  async updateLastUsed(id: number): Promise<void> {
+    await db.run('UPDATE api_keys SET last_used_at = ? WHERE id = ?', [dbNow(), id]);
   },
 
-  deactivate(id: number): void {
-    db.getDb()
-      .prepare(`UPDATE api_keys SET is_active = 0, updated_at = datetime('now') WHERE id = ?`)
-      .run(id);
+  async deactivate(id: number): Promise<void> {
+    await db.run('UPDATE api_keys SET is_active = 0, updated_at = ? WHERE id = ?', [
+      dbNow(),
+      id,
+    ]);
   },
 
-  update(
+  async update(
     id: number,
     data: {
       webhook_url?: string | null;
@@ -110,9 +101,9 @@ export const apiKeyRepository = {
       ip_whitelist?: string | null;
       name?: string;
     },
-  ): void {
-    const sets: string[] = ["updated_at = datetime('now')"];
-    const params: (string | null | number)[] = [];
+  ): Promise<void> {
+    const sets: string[] = ['updated_at = ?'];
+    const params: (string | null | number)[] = [dbNow()];
 
     if (data.name !== undefined) {
       sets.push('name = ?');
@@ -132,8 +123,6 @@ export const apiKeyRepository = {
     }
 
     params.push(id);
-    db.getDb()
-      .prepare(`UPDATE api_keys SET ${sets.join(', ')} WHERE id = ?`)
-      .run(...params);
+    await db.run(`UPDATE api_keys SET ${sets.join(', ')} WHERE id = ?`, params);
   },
 };

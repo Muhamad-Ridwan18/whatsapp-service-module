@@ -4,9 +4,9 @@ import { userRepository } from './database/repositories/user.repository.js';
 import { logger } from './logger/index.js';
 
 export async function bootstrap(): Promise<void> {
-  if (userRepository.count() === 0) {
+  if ((await userRepository.count()) === 0) {
     const passwordHash = await hashPassword(config.admin.password);
-    userRepository.create({
+    await userRepository.create({
       email: config.admin.email,
       password_hash: passwordHash,
       name: config.admin.name,

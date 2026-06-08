@@ -39,7 +39,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/login', async (request, reply) => {
     const body = request.body as { email?: string; password?: string };
-    const user = userRepository.findByEmail(body.email ?? '');
+    const user = await userRepository.findByEmail(body.email ?? '');
 
     if (!user || !(await verifyPassword(body.password ?? '', user.password_hash))) {
       return reply.view('login.ejs', { title: 'Login', error: 'Invalid credentials' });
@@ -71,7 +71,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const query = request.query as { scan?: string; error?: string; phone?: string; success?: string; tab?: string };
-    const ctx = getDashboardContext(request.authUser!, {
+    const ctx = await getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
       scanSession: query.scan ?? null,
@@ -114,13 +114,13 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       return reply.redirect('/dashboard/settings?error=password_mismatch');
     }
 
-    const user = userRepository.findById(request.authUser!.sub);
+    const user = await userRepository.findById(request.authUser!.sub);
     if (!user || !(await verifyPassword(body.currentPassword ?? '', user.password_hash))) {
       return reply.redirect('/dashboard/settings?error=wrong_password');
     }
 
     const hash = await hashPassword(body.newPassword);
-    userRepository.updatePassword(user.email, hash);
+    await userRepository.updatePassword(user.email, hash);
     return reply.redirect('/dashboard/settings?success=1');
   });
 
@@ -133,7 +133,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const query = request.query as { error?: string; success?: string };
-    const ctx = getDashboardContext(request.authUser!, {
+    const ctx = await getDashboardContext(request.authUser!, {
       title: 'Users',
       activePage: 'users',
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
@@ -161,12 +161,12 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!body.email || !body.password || body.password.length < 6 || !body.name) {
       return reply.redirect('/dashboard/users?error=invalid_input');
     }
-    if (userRepository.findByEmail(body.email)) {
+    if (await userRepository.findByEmail(body.email)) {
       return reply.redirect('/dashboard/users?error=user_exists');
     }
 
     const passwordHash = await hashPassword(body.password);
-    userRepository.createClient({
+    await userRepository.createClient({
       email: body.email,
       password_hash: passwordHash,
       name: body.name,
@@ -185,9 +185,9 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = parseInt((request.params as { id: string }).id, 10);
-    const target = userRepository.findById(id);
+    const target = await userRepository.findById(id);
     if (target && target.id !== request.authUser!.sub && target.role !== 'super_admin') {
-      userRepository.deactivate(id);
+      await userRepository.deactivate(id);
     }
 
     return reply.redirect('/dashboard/users');
@@ -209,9 +209,9 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const { sessionId, phoneNumber } = parsed.data;
 
     try {
-      const activeKey = apiKeyRepository.findActiveByUserId(request.authUser!.sub);
+      const activeKey = await apiKeyRepository.findActiveByUserId(request.authUser!.sub);
       const bound = activeKey
-        ? sessionRepository.findByApiKeyId(activeKey.id)
+        ? await sessionRepository.findByApiKeyId(activeKey.id)
         : undefined;
       if (bound && bound.session_id !== sessionId) {
         return reply.redirect('/dashboard?error=key_session_limit');
@@ -244,7 +244,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
     try {
-      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await assertDashboardSessionAccess(request.authUser!, sessionId);
       await sessionManager.restart(sessionId);
     } catch (err) {
       if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
@@ -259,7 +259,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
     try {
-      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await assertDashboardSessionAccess(request.authUser!, sessionId);
       await sessionManager.disconnect(sessionId);
     } catch (err) {
       if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
@@ -274,7 +274,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
     const { sessionId } = sessionIdParamSchema.parse(request.params);
     try {
-      assertDashboardSessionAccess(request.authUser!, sessionId);
+      await assertDashboardSessionAccess(request.authUser!, sessionId);
       await sessionManager.deleteSession(sessionId);
     } catch (err) {
       if (err instanceof AppError && err.code === ERR.FORBIDDEN) {
@@ -305,7 +305,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       return reply.redirect('/dashboard?error=invalid_input');
     }
 
-    const created = createApiKeyForUser(request.authUser!.sub, {
+    const created = await createApiKeyForUser(request.authUser!.sub, {
       name: parsed.data.name,
       permissions: parsed.data.permissions ?? [
         'message:send',
@@ -317,7 +317,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       webhook_events: parsed.data.webhook_events,
     });
 
-    const ctx = getDashboardContext(request.authUser!, {
+    const ctx = await getDashboardContext(request.authUser!, {
       title: 'Dashboard',
       activePage: 'dashboard',
       activeTab: 'apikeys',
@@ -336,11 +336,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const id = parseInt((request.params as { id: string }).id, 10);
     const key =
       request.authUser!.role === 'super_admin'
-        ? apiKeyRepository.findById(id)
-        : apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
+        ? await apiKeyRepository.findById(id)
+        : await apiKeyRepository.findByIdAndUserId(id, request.authUser!.sub);
 
     if (key?.is_active) {
-      apiKeyRepository.deactivate(id);
+      await apiKeyRepository.deactivate(id);
     }
 
     return reply.redirect('/dashboard?success=key_revoked&tab=apikeys');
@@ -350,7 +350,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
     const { sessionId } = sessionIdParamSchema.parse(request.params);
-    assertDashboardSessionAccess(request.authUser!, sessionId);
+    await assertDashboardSessionAccess(request.authUser!, sessionId);
 
     return sendSuccess(reply, {
       qr: sessionManager.getQr(sessionId),
@@ -369,7 +369,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     if (body.sessionId && body.to && body.message) {
       try {
-        assertDashboardSessionAccess(request.authUser!, body.sessionId);
+        await assertDashboardSessionAccess(request.authUser!, body.sessionId);
         messageQueue.enqueue(body.sessionId, body.to, {
           type: 'text',
           message: body.message,

@@ -1,8 +1,9 @@
 import type { MessageRow, MessageType } from '../../../types/index.js';
 import { db } from '../index.js';
+import { sqlTodayFilter } from '../sql.js';
 
 export const messageRepository = {
-  create(data: {
+  async create(data: {
     session_id: string;
     message_id?: string | null;
     direction: 'inbound' | 'outbound';
@@ -13,14 +14,11 @@ export const messageRepository = {
     media_url?: string | null;
     status?: string;
     api_key_id?: number | null;
-  }): number {
-    const result = db
-      .getDb()
-      .prepare(
-        `INSERT INTO messages (session_id, message_id, direction, type, to_number, from_number, content, media_url, status, api_key_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+  }): Promise<number> {
+    const result = await db.run(
+      `INSERT INTO messages (session_id, message_id, direction, type, to_number, from_number, content, media_url, status, api_key_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         data.session_id,
         data.message_id ?? null,
         data.direction,
@@ -31,46 +29,45 @@ export const messageRepository = {
         data.media_url ?? null,
         data.status ?? 'pending',
         data.api_key_id ?? null,
-      );
-    return Number(result.lastInsertRowid);
+      ],
+    );
+    return result.lastInsertRowid;
   },
 
-  updateStatus(id: number, status: string, messageId?: string): void {
+  async updateStatus(id: number, status: string, messageId?: string): Promise<void> {
     if (messageId) {
-      db.getDb()
-        .prepare(
-          `UPDATE messages SET status = ?, message_id = ? WHERE id = ?`,
-        )
-        .run(status, messageId, id);
+      await db.run('UPDATE messages SET status = ?, message_id = ? WHERE id = ?', [
+        status,
+        messageId,
+        id,
+      ]);
     } else {
-      db.getDb()
-        .prepare(`UPDATE messages SET status = ? WHERE id = ?`)
-        .run(status, id);
+      await db.run('UPDATE messages SET status = ? WHERE id = ?', [status, id]);
     }
   },
 
-  log(messageId: number, sessionId: string, event: string, payload?: unknown): void {
-    db.getDb()
-      .prepare(
-        `INSERT INTO message_logs (message_id, session_id, event, payload) VALUES (?, ?, ?, ?)`,
-      )
-      .run(messageId, sessionId, event, payload ? JSON.stringify(payload) : null);
+  async log(
+    messageId: number,
+    sessionId: string,
+    event: string,
+    payload?: unknown,
+  ): Promise<void> {
+    await db.run(
+      'INSERT INTO message_logs (message_id, session_id, event, payload) VALUES (?, ?, ?, ?)',
+      [messageId, sessionId, event, payload ? JSON.stringify(payload) : null],
+    );
   },
 
-  recent(limit = 50): MessageRow[] {
-    return db
-      .getDb()
-      .prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT ?')
-      .all(limit) as MessageRow[];
+  async recent(limit = 50): Promise<MessageRow[]> {
+    return db.all<MessageRow>('SELECT * FROM messages ORDER BY created_at DESC LIMIT ?', [
+      limit,
+    ]);
   },
 
-  countToday(): number {
-    const row = db
-      .getDb()
-      .prepare(
-        `SELECT COUNT(*) as c FROM messages WHERE date(created_at) = date('now')`,
-      )
-      .get() as { c: number };
-    return row.c;
+  async countToday(): Promise<number> {
+    const row = await db.get<{ c: number }>(
+      `SELECT COUNT(*) as c FROM messages WHERE ${sqlTodayFilter('created_at')}`,
+    );
+    return row?.c ?? 0;
   },
 };

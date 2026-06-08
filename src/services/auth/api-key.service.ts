@@ -13,8 +13,8 @@ export interface CreateApiKeyInput {
   replaceExisting?: boolean;
 }
 
-export function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
-  const active = apiKeyRepository.findActiveByUserId(userId);
+export async function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
+  const active = await apiKeyRepository.findActiveByUserId(userId);
   if (active && input.replaceExisting === false) {
     throw new AppError(
       'Akun ini sudah memiliki API key aktif. Nonaktifkan dulu atau gunakan replace.',
@@ -26,11 +26,11 @@ export function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
   const previousKeyId = active?.id;
 
   if (active) {
-    apiKeyRepository.deactivateAllByUserId(userId);
+    await apiKeyRepository.deactivateAllByUserId(userId);
   }
 
   const { key, hash, prefix } = generateApiKey();
-  const id = apiKeyRepository.create({
+  const id = await apiKeyRepository.create({
     user_id: userId,
     key_hash: hash,
     key_prefix: prefix,
@@ -46,12 +46,12 @@ export function createApiKeyForUser(userId: number, input: CreateApiKeyInput) {
   });
 
   if (previousKeyId) {
-    sessionRepository.transferApiKeyBindings(previousKeyId, id);
+    await sessionRepository.transferApiKeyBindings(previousKeyId, id);
   } else {
-    const userSessions = sessionRepository.listByUserId(userId);
+    const userSessions = await sessionRepository.listByUserId(userId);
     const unbound = userSessions.filter((s) => s.api_key_id == null);
     if (unbound.length === 1) {
-      sessionRepository.bindApiKey(unbound[0].session_id, id);
+      await sessionRepository.bindApiKey(unbound[0].session_id, id);
     }
   }
 
