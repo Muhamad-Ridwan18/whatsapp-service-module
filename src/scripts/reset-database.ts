@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import mysql from 'mysql2/promise';
+import mysql, { type RowDataPacket } from 'mysql2/promise';
+
+interface TableRow extends RowDataPacket {
+  TABLE_NAME: string;
+}
 import { config } from '../config/index.js';
 import { db } from '../services/database/index.js';
 import { userRepository } from '../services/database/repositories/user.repository.js';
@@ -29,7 +33,7 @@ async function resetMysql(): Promise<void> {
   });
 
   await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-  const [tables] = await conn.query<{ TABLE_NAME: string }[]>(
+  const [tables] = await conn.query<TableRow[]>(
     'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?',
     [config.database.mysql.database],
   );
