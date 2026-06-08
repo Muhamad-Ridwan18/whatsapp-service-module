@@ -303,6 +303,69 @@
     return el.getAttribute('data-copy-text') || el.textContent || '';
   }
 
+  var fillPhoneBtn = document.getElementById('btnFillMyPhone');
+  var testToInput = document.getElementById('testTo');
+  if (fillPhoneBtn && testToInput) {
+    fillPhoneBtn.addEventListener('click', function () {
+      var phone = fillPhoneBtn.getAttribute('data-phone') || '';
+      if (phone) testToInput.value = phone;
+    });
+  }
+
+  var testForm = document.getElementById('testSendForm');
+  var testStatus = document.getElementById('testSendStatus');
+  var testSubmitBtn = document.getElementById('btnTestSend');
+  if (testForm && testStatus) {
+    testForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (testSubmitBtn?.disabled) return;
+
+      var fd = new FormData(testForm);
+      var to = (fd.get('to') || '').toString().trim();
+      var message = (fd.get('message') || '').toString().trim();
+
+      if (!to || !message) {
+        testStatus.className = 'text-sm text-red-400';
+        testStatus.textContent = 'Lengkapi nomor dan pesan.';
+        return;
+      }
+
+      if (testSubmitBtn) testSubmitBtn.disabled = true;
+      testStatus.className = 'text-sm text-txt-muted';
+      testStatus.textContent = 'Mengantri pesan...';
+
+      fetch('/dashboard/send-test', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ to: to, message: message }).toString(),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+        .then(function (res) {
+          if (res.ok && res.body.success && res.body.data) {
+            var d = res.body.data;
+            testStatus.className = 'text-sm text-brand';
+            testStatus.textContent =
+              '✓ Masuk antrian ke ' + (d.to || to) +
+              (d.jobId ? ' (job: ' + d.jobId.slice(0, 8) + '…)' : '');
+            return;
+          }
+          var msg = res.body.message || 'Gagal mengirim pesan.';
+          testStatus.className = 'text-sm text-red-400';
+          testStatus.textContent = msg;
+        })
+        .catch(function () {
+          testStatus.className = 'text-sm text-red-400';
+          testStatus.textContent = 'Gagal menghubungi server.';
+        })
+        .finally(function () {
+          if (testSubmitBtn) testSubmitBtn.disabled = false;
+        });
+    });
+  }
+
   document.querySelectorAll('.btn-copy').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var defaultHtml = btn.innerHTML;

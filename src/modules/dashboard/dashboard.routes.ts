@@ -12,7 +12,7 @@ import {
   getAccountBundle,
 } from '../../services/account/account.service.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import { sendSuccess } from '../../utils/response.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 import {
   verifyDashboardCookie,
   requireDashboardRole,
@@ -22,17 +22,25 @@ import {
 } from './dashboard.helper.js';
 import { roleLabel } from '../../utils/labels.js';
 import { authLogger } from '../../services/logger/index.js';
+import { resolvePhoneNumber } from '../../utils/phone.js';
 import type { UserRow } from '../../types/index.js';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: 'Input tidak valid',
+  invalid_phone: 'Nomor tujuan tidak valid',
   phone_exists: 'Nomor WhatsApp sudah terdaftar',
   password_mismatch: 'Konfirmasi password tidak cocok',
   wrong_password: 'Password saat ini salah',
   session_forbidden: 'Akses ditolak',
   reconnect_failed: 'Gagal menghubungkan ulang',
   phone_mismatch: 'Nomor yang discan tidak cocok dengan nomor terdaftar',
+  session_not_connected: 'WhatsApp belum terhubung. Scan QR di tab WhatsApp.',
+  no_session: 'Belum ada session WhatsApp.',
 };
+
+function wantsJsonResponse(request: FastifyRequest): boolean {
+  return (request.headers.accept ?? '').includes('application/json');
+}
 
 function authCookieOptions(request: FastifyRequest) {
   const forwardedProto = request.headers['x-forwarded-proto'];
@@ -164,10 +172,19 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
-    const query = request.query as { scan?: string; error?: string; success?: string; tab?: string };
+    const query = request.query as {
+      scan?: string;
+      error?: string;
+      success?: string;
+      tab?: string;
+      job?: string;
+    };
     const successMap: Record<string, string> = {
       registered: 'Akun berhasil dibuat. Scan QR untuk menghubungkan WhatsApp.',
       webhook_saved: 'Webhook URL berhasil disimpan.',
+      message_queued: query.job
+        ? `Pesan masuk antrian (job: ${query.job}). Estimasi kirim 3–8 detik.`
+        : 'Pesan masuk antrian. Estimasi kirim 3–8 detik.',
     };
 
     const ctx = await getDashboardContext(request.authUser!, {
@@ -177,6 +194,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       ...(query.scan ? { scanSession: query.scan } : {}),
       errorMessage: query.error ? ERROR_MESSAGES[query.error] ?? 'Terjadi kesalahan' : null,
       successMessage: query.success ? successMap[query.success] ?? null : null,
+      ...(query.job ? { testJobId: query.job } : {}),
     });
 
     return reply.view('dashboard.ejs', ctx);
@@ -386,17 +404,60 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.post('/dashboard/send-test', async (request, reply) => {
     if (!(await verifyDashboardCookie(request, reply, app))) return;
 
+    const json = wantsJsonResponse(request);
     const body = request.body as { to?: string; message?: string };
+    const toRaw = (body.to ?? '').trim();
+    const message = (body.message ?? '').trim();
+
+    if (!toRaw || !message) {
+      if (json) {
+        return sendError(reply, ERROR_MESSAGES.invalid_input, 'ERR_VALIDATION', 400);
+      }
+      return reply.redirect('/dashboard?tab=test&error=invalid_input');
+    }
+
     const bundle = await getAccountBundle(request.authUser!.sub);
     const sessionId = bundle.session?.session_id;
 
-    if (sessionId && body.to && body.message) {
-      messageQueue.enqueue(sessionId, body.to, {
-        type: 'text',
-        message: body.message,
-      });
+    if (!sessionId) {
+      if (json) {
+        return sendError(reply, ERROR_MESSAGES.no_session, 'ERR_NOT_FOUND', 400);
+      }
+      return reply.redirect('/dashboard?tab=test&error=no_session');
     }
 
-    return reply.redirect('/dashboard?tab=activity');
+    if (sessionManager.getStatus(sessionId) !== 'connected') {
+      if (json) {
+        return sendError(reply, ERROR_MESSAGES.session_not_connected, 'ERR_SESSION_NOT_CONNECTED', 400);
+      }
+      return reply.redirect('/dashboard?tab=test&error=session_not_connected');
+    }
+
+    let normalizedTo: string;
+    try {
+      normalizedTo = resolvePhoneNumber({ to: toRaw });
+    } catch {
+      if (json) {
+        return sendError(reply, ERROR_MESSAGES.invalid_phone, 'ERR_VALIDATION', 400);
+      }
+      return reply.redirect('/dashboard?tab=test&error=invalid_phone');
+    }
+
+    const jobId = messageQueue.enqueue(sessionId, normalizedTo, {
+      type: 'text',
+      message,
+    });
+
+    if (json) {
+      return sendSuccess(reply, {
+        success: true,
+        jobId,
+        to: normalizedTo,
+        message: 'Pesan masuk antrian',
+        queue: messageQueue.getStats(),
+      }, 202);
+    }
+
+    return reply.redirect(`/dashboard?tab=test&success=message_queued&job=${jobId}`);
   });
 }

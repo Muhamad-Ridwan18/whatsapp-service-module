@@ -112,6 +112,7 @@
       <button type="button" class="tab-active" data-tab="whatsapp" role="tab">WhatsApp</button>
       <button type="button" class="tab" data-tab="apikeys" role="tab">API Key</button>
       <button type="button" class="tab" data-tab="integrate" role="tab">Integrasi</button>
+      <button type="button" class="tab" data-tab="test" role="tab">Tes Pesan</button>
       <button type="button" class="tab" data-tab="activity" role="tab">Aktivitas</button>
     </div>
 
@@ -190,29 +191,6 @@
         </div>
       </div>
 
-      <% if (account.sessionStatus === 'connected') { %>
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Kirim pesan uji</h2>
-          <p class="card-desc">Menggunakan session <code class="text-brand font-mono text-xs"><%= account.sessionId %></code> secara otomatis.</p>
-        </div>
-        <div class="card-body">
-          <form method="POST" action="/dashboard/send-test" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="label">Ke nomor</label>
-                <input type="text" name="to" placeholder="628123456789" class="input" required>
-              </div>
-              <div>
-                <label class="label">Pesan</label>
-                <input type="text" name="message" placeholder="Halo, pesan uji" class="input" required>
-              </div>
-            </div>
-            <button type="submit" class="btn-brand">Kirim pesan</button>
-          </form>
-        </div>
-      </div>
-      <% } %>
       <% } %>
     </div>
 
@@ -312,6 +290,90 @@ Content-Type: application/json
       </div>
     </div>
 
+    <!-- Test send panel -->
+    <div id="panel-test" class="tab-panel hidden space-y-4 sm:space-y-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="flex items-start gap-3">
+            <span class="step-badge">✉</span>
+            <div>
+              <h2 class="card-title">Tes kirim pesan</h2>
+              <p class="card-desc">Kirim pesan WhatsApp langsung dari dashboard. Session <code class="text-brand font-mono text-xs"><%= account.sessionId || '—' %></code> dipakai otomatis.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card-body space-y-4">
+          <% if (!account.sessionId) { %>
+            <div class="alert alert-error">Belum ada session. <a href="/register" class="text-brand underline">Daftar akun</a> terlebih dahulu.</div>
+          <% } else if (account.sessionStatus !== 'connected') { %>
+            <div class="alert alert-error">
+              WhatsApp belum terhubung (status: <strong><%= account.sessionStatusLabel %></strong>).
+              <button type="button" class="text-brand underline ml-1" data-tab="whatsapp" onclick="document.querySelector('[data-tab=whatsapp]')?.click()">Scan QR →</button>
+            </div>
+          <% } else { %>
+            <div class="info-row border-0 pb-0">
+              <span class="info-row-label">Status</span>
+              <span class="badge-success">Terhubung</span>
+            </div>
+            <div class="info-row border-0">
+              <span class="info-row-label">Antrian</span>
+              <span class="info-row-value"><%= stats.queue.pending %> menunggu · <%= stats.queue.active %> aktif</span>
+            </div>
+          <% } %>
+
+          <form id="testSendForm" method="POST" action="/dashboard/send-test" class="space-y-4 max-w-xl">
+            <div>
+              <label class="label" for="testTo">Ke nomor</label>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="tel"
+                  id="testTo"
+                  name="to"
+                  placeholder="628123456789"
+                  class="input flex-1"
+                  value="<%= typeof testTo !== 'undefined' ? testTo : '' %>"
+                  <%= (!account.sessionId || account.sessionStatus !== 'connected') ? 'disabled' : '' %>
+                  required
+                >
+                <% if (account.phone) { %>
+                <button
+                  type="button"
+                  id="btnFillMyPhone"
+                  class="btn-outline shrink-0"
+                  data-phone="<%= account.phone %>"
+                  <%= account.sessionStatus !== 'connected' ? 'disabled' : '' %>
+                >Nomor saya</button>
+                <% } %>
+              </div>
+              <p class="hint mt-1">Format internasional tanpa + (contoh: 628123456789 atau 0812...)</p>
+            </div>
+            <div>
+              <label class="label" for="testMessage">Pesan</label>
+              <textarea
+                id="testMessage"
+                name="message"
+                rows="3"
+                placeholder="Halo, ini pesan uji dari WhatsApp Service Module."
+                class="input resize-y min-h-[88px]"
+                <%= (!account.sessionId || account.sessionStatus !== 'connected') ? 'disabled' : '' %>
+                required
+              >Halo, ini pesan uji dari WhatsApp Service Module.</textarea>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                id="btnTestSend"
+                class="btn-brand"
+                <%= (!account.sessionId || account.sessionStatus !== 'connected') ? 'disabled' : '' %>
+              >Kirim pesan uji</button>
+              <p id="testSendStatus" class="text-sm text-txt-muted" role="status" aria-live="polite"></p>
+            </div>
+            <p class="hint">Pesan masuk antrian dengan delay 3–8 detik (anti-spam). Cek hasil di tab Aktivitas.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- Activity panel -->
     <div id="panel-activity" class="tab-panel hidden space-y-4 sm:space-y-6">
       <div class="card">
@@ -381,6 +443,10 @@ Content-Type: application/json
     <button type="button" class="mobile-nav-item" data-tab="integrate" role="tab">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
       Integrasi
+    </button>
+    <button type="button" class="mobile-nav-item" data-tab="test" role="tab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      Tes
     </button>
     <button type="button" class="mobile-nav-item" data-tab="activity" role="tab">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
