@@ -62,7 +62,13 @@ export class MysqlClient implements DbClient {
       .filter(Boolean);
 
     for (const statement of statements) {
-      await this.pool.execute(statement);
+      try {
+        await this.pool.execute(statement);
+      } catch (err) {
+        const code = (err as { errno?: number }).errno;
+        if (code === 1061) continue;
+        throw err;
+      }
     }
   }
 

@@ -109,17 +109,25 @@ export const mysqlMigrations: { version: number; sql: string }[] = [
     sql: `
       CREATE UNIQUE INDEX idx_sessions_api_key_unique ON sessions (api_key_id);
 
-      UPDATE sessions
-      SET api_key_id = (
-        SELECT ak.id FROM api_keys ak
-        WHERE ak.user_id = sessions.user_id AND ak.is_active = 1
-        LIMIT 1
-      )
-      WHERE api_key_id IS NULL
-        AND user_id IS NOT NULL
-        AND (
-          SELECT COUNT(*) FROM sessions s2 WHERE s2.user_id = sessions.user_id
-        ) = 1;
+      UPDATE sessions s
+      INNER JOIN (
+        SELECT s1.id AS session_pk,
+          (
+            SELECT ak.id
+            FROM api_keys ak
+            WHERE ak.user_id = s1.user_id AND ak.is_active = 1
+            ORDER BY ak.id ASC
+            LIMIT 1
+          ) AS bound_key
+        FROM sessions s1
+        WHERE s1.api_key_id IS NULL
+          AND s1.user_id IS NOT NULL
+          AND (
+            SELECT COUNT(*) FROM sessions s2 WHERE s2.user_id = s1.user_id
+          ) = 1
+      ) src ON src.session_pk = s.id
+      SET s.api_key_id = src.bound_key
+      WHERE src.bound_key IS NOT NULL;
     `,
   },
   {
