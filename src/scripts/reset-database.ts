@@ -7,6 +7,7 @@ interface TableRow extends RowDataPacket {
   TABLE_NAME: string;
 }
 import { config } from '../config/index.js';
+import { ensureUserBundle } from '../services/account/account.service.js';
 import { db } from '../services/database/index.js';
 import { userRepository } from '../services/database/repositories/user.repository.js';
 import { hashPassword } from '../utils/crypto.js';
@@ -67,7 +68,7 @@ async function seedAdmin(): Promise<void> {
   }
 
   const passwordHash = await hashPassword(config.admin.password);
-  await userRepository.create({
+  const userId = await userRepository.create({
     email: config.admin.email,
     phone_number: phone,
     password_hash: passwordHash,
@@ -75,9 +76,15 @@ async function seedAdmin(): Promise<void> {
     role: 'super_admin',
   });
 
+  const bundle = await ensureUserBundle(userId, phone, { connect: false });
+
   console.log('Admin dibuat:');
-  console.log(`  Login   : ${phone}`);
-  console.log(`  Password: (dari ADMIN_PASSWORD di .env)`);
+  console.log(`  Login     : ${phone}`);
+  console.log(`  Session   : ${bundle.sessionId}`);
+  console.log(`  Password  : (dari ADMIN_PASSWORD di .env)`);
+  if (bundle.apiKey) {
+    console.log(`  API Key   : ${bundle.apiKey}`);
+  }
 }
 
 async function main(): Promise<void> {

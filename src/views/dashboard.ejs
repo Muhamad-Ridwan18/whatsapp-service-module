@@ -23,8 +23,9 @@
       </div>
       <div class="card-body space-y-3">
         <p class="hint font-mono">WHATSAPP_API_KEY=</p>
-        <code id="newApiKeyValue" class="block w-full bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all"><%= newApiKey %></code>
+        <code id="newApiKeyValue" data-copy-text="<%= newApiKey %>" class="block w-full bg-bg border border-border rounded-lg px-4 py-3 text-sm font-mono text-brand-light break-all select-all"><%= newApiKey %></code>
         <button type="button" id="btnCopyKey" class="btn-brand">Salin Key</button>
+        <p class="hint">Jika tombol gagal (HTTP tanpa SSL), blok teks di atas lalu salin manual (Ctrl+C).</p>
       </div>
     </div>
     <% } %>
@@ -272,8 +273,10 @@
           </div>
         </div>
         <div class="card-body space-y-4">
-          <pre class="code-block" id="envSnippet">WHATSAPP_SERVICE_URL=<%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:3000' %>
-WHATSAPP_API_KEY=<span class="text-brand"><%= newApiKey || (account.apiKeyPrefix ? account.apiKeyPrefix + '••••••' : 'YOUR_API_KEY') %></span></pre>
+          <% const envApiKey = newApiKey || (account.apiKeyPrefix ? account.apiKeyPrefix + '••••••' : 'YOUR_API_KEY'); %>
+          <% const envCopyText = 'WHATSAPP_SERVICE_URL=' + (typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:3000') + '\nWHATSAPP_API_KEY=' + envApiKey; %>
+          <pre class="code-block select-all" id="envSnippet" data-copy-text="<%= envCopyText %>">WHATSAPP_SERVICE_URL=<%= typeof baseUrl !== 'undefined' ? baseUrl : 'http://localhost:3000' %>
+WHATSAPP_API_KEY=<span class="text-brand"><%= envApiKey %></span></pre>
           <button type="button" id="btnCopyEnv" class="btn-outline">Salin konfigurasi</button>
 
           <div class="mt-6 pt-6 border-t border-border">

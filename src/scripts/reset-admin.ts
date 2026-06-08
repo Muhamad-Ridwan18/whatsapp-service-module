@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { config } from '../config/index.js';
+import { ensureUserBundle } from '../services/account/account.service.js';
 import { db } from '../services/database/index.js';
 import { userRepository } from '../services/database/repositories/user.repository.js';
 import { hashPassword } from '../utils/crypto.js';
@@ -49,17 +50,22 @@ async function main(): Promise<void> {
 
   if (forceRecreate) {
     await userRepository.deleteAll();
-    await userRepository.create({
+    const userId = await userRepository.create({
       email,
       phone_number: phone,
       password_hash: passwordHash,
       name,
       role: 'super_admin',
     });
+    const bundle = await ensureUserBundle(userId, phone!, { connect: false });
     console.log('Admin dibuat ulang (semua user dihapus):');
-    console.log(`  Login   : ${phone}`);
-    console.log(`  Password: (dari argumen / .env)`);
-    console.log(`  Name    : ${name}`);
+    console.log(`  Login     : ${phone}`);
+    console.log(`  Session   : ${bundle.sessionId}`);
+    console.log(`  Password  : (dari argumen / .env)`);
+    console.log(`  Name      : ${name}`);
+    if (bundle.apiKey) {
+      console.log(`  API Key   : ${bundle.apiKey}`);
+    }
     await db.close();
     return;
   }
@@ -86,15 +92,26 @@ async function main(): Promise<void> {
       console.log('Super admin berhasil diupdate:');
       console.log(`  Login: ${phone}`);
     } else {
-      await userRepository.create({
+      const userId = await userRepository.create({
         email,
         phone_number: phone,
         password_hash: passwordHash,
         name,
         role: 'super_admin',
       });
+      if (phone) {
+        await ensureUserBundle(userId, phone, { connect: false });
+      }
       console.log('Admin baru dibuat:');
       console.log(`  Login: ${phone}`);
+    }
+  }
+
+  if (phone) {
+    const users = await userRepository.list();
+    const superAdmin = users.find((u) => u.role === 'super_admin' && u.phone_number === phone);
+    if (superAdmin) {
+      await ensureUserBundle(superAdmin.id, phone, { connect: false });
     }
   }
 

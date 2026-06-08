@@ -96,6 +96,7 @@ async function provisionBundleForUser(
   userId: number,
   phone: string,
   sessionId: string,
+  options?: { connect?: boolean },
 ): Promise<{ apiKey: string; apiKeyId: number }> {
   const existing = await sessionRepository.findByUserId(userId);
   if (existing) {
@@ -116,13 +117,36 @@ async function provisionBundleForUser(
     status: 'initializing',
   });
 
-  await sessionManager.create(sessionId, {
-    userId,
-    apiKeyId: id,
-    phoneNumber: phone,
-  });
+  if (options?.connect !== false) {
+    await sessionManager.create(sessionId, {
+      userId,
+      apiKeyId: id,
+      phoneNumber: phone,
+    });
+  }
 
   return { apiKey, apiKeyId: id };
+}
+
+/** Pastikan user punya session + API key (idempotent). */
+export async function ensureUserBundle(
+  userId: number,
+  phone: string,
+  options?: { connect?: boolean },
+): Promise<{ sessionId: string; apiKey?: string }> {
+  const normalized = normalizePhoneDigits(phone);
+  if (normalized.length < 10) {
+    throw new AppError('Nomor WhatsApp tidak valid', ERR.VALIDATION, 422);
+  }
+
+  const existing = await sessionRepository.findByUserId(userId);
+  if (existing) {
+    return { sessionId: existing.session_id };
+  }
+
+  const sessionId = sessionIdFromPhone(normalized);
+  const { apiKey } = await provisionBundleForUser(userId, normalized, sessionId, options);
+  return { sessionId, apiKey };
 }
 
 /** Regenerasi API key — session tetap sama. */

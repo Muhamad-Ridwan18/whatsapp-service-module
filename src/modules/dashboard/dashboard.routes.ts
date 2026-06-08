@@ -375,6 +375,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     const sessionId = (request.params as { sessionId: string }).sessionId;
     await assertDashboardSessionAccess(request.authUser!, sessionId);
+    await sessionManager.ensureConnection(sessionId);
 
     return sendSuccess(reply, {
       qr: sessionManager.getQr(sessionId),

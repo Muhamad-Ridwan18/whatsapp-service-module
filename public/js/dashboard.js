@@ -244,14 +244,58 @@
     });
   });
 
+  function fallbackCopyText(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyToClipboard(text, btn, okText, defaultText) {
+    if (!text) {
+      btn.textContent = 'Tidak ada teks';
+      setTimeout(function () { btn.textContent = defaultText; }, 2000);
+      return;
+    }
+
+    function onSuccess() {
+      btn.textContent = okText;
+      setTimeout(function () { btn.textContent = defaultText; }, 2000);
+    }
+
+    function onFail() {
+      btn.textContent = 'Gagal — salin manual';
+      setTimeout(function () { btn.textContent = defaultText; }, 2500);
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(function () {
+        fallbackCopyText(text) ? onSuccess() : onFail();
+      });
+      return;
+    }
+
+    fallbackCopyText(text) ? onSuccess() : onFail();
+  }
+
   var copyBtn = document.getElementById('btnCopyKey');
   var keyVal = document.getElementById('newApiKeyValue');
   if (copyBtn && keyVal) {
     copyBtn.addEventListener('click', function () {
-      navigator.clipboard.writeText(keyVal.textContent || '').then(function () {
-        copyBtn.textContent = 'Tersalin!';
-        setTimeout(function () { copyBtn.textContent = 'Salin Key'; }, 2000);
-      });
+      var text = keyVal.getAttribute('data-copy-text') || keyVal.textContent || '';
+      copyToClipboard(text.trim(), copyBtn, 'Tersalin!', 'Salin Key');
     });
   }
 
@@ -259,10 +303,8 @@
   var envSnippet = document.getElementById('envSnippet');
   if (copyEnvBtn && envSnippet) {
     copyEnvBtn.addEventListener('click', function () {
-      navigator.clipboard.writeText(envSnippet.textContent || '').then(function () {
-        copyEnvBtn.textContent = 'Tersalin!';
-        setTimeout(function () { copyEnvBtn.textContent = 'Salin konfigurasi'; }, 2000);
-      });
+      var text = envSnippet.getAttribute('data-copy-text') || envSnippet.textContent || '';
+      copyToClipboard(text.trim(), copyEnvBtn, 'Tersalin!', 'Salin konfigurasi');
     });
   }
 })();
