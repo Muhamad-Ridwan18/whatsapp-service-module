@@ -6,6 +6,8 @@ import {
   resolvePhoneNumber,
   toJid,
   formatDisplayPhone,
+  phoneFromWaJid,
+  phonesMatch,
 } from './phone.js';
 
 describe('phone utils', () => {
@@ -23,6 +25,18 @@ describe('phone utils', () => {
 
   it('formatDisplayPhone strips suffix', () => {
     expect(formatDisplayPhone('628123456789@s.whatsapp.net')).toBe('628123456789');
+  });
+
+  it('phoneFromWaJid ignores device suffix', () => {
+    expect(phoneFromWaJid('62881081871528:0@s.whatsapp.net')).toBe('62881081871528');
+    expect(phoneFromWaJid('62881081871528:12@s.whatsapp.net')).toBe('62881081871528');
+  });
+
+  it('phonesMatch tolerates 62 vs local format', () => {
+    expect(phonesMatch('62881081871528', '62881081871528')).toBe(true);
+    expect(phonesMatch('62881081871528', '0881081871528')).toBe(true);
+    expect(phonesMatch('62881081871528', '881081871528')).toBe(true);
+    expect(phonesMatch('62881081871528', '628999999999')).toBe(false);
   });
 
   it('normalizePhoneDigits handles 0 prefix', () => {

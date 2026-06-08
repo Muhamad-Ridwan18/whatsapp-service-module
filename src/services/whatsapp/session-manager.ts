@@ -13,7 +13,7 @@ import QRCode from 'qrcode';
 import { config } from '../../config/index.js';
 import type { MessagePayload, SessionStatus } from '../../types/index.js';
 import { AppError, ERR } from '../../utils/errors.js';
-import { formatDisplayPhone, normalizePhoneDigits } from '../../utils/phone.js';
+import { formatDisplayPhone, normalizePhoneDigits, phoneFromWaJid, phonesMatch } from '../../utils/phone.js';
 import { sessionRepository } from '../database/repositories/session.repository.js';
 import { sessionEventRepository } from '../database/repositories/session-event.repository.js';
 import { messageRepository } from '../database/repositories/message.repository.js';
@@ -331,15 +331,15 @@ class SessionManager {
           inst!.reconnectAttempts = 0;
           inst!.qrBase64 = null;
           const user = socket.user;
-          const phone = user?.id ? formatDisplayPhone(user.id) : undefined;
+          const rawJid = user?.id;
+          const isLid = !!rawJid?.includes('@lid');
+          const phone = rawJid && !isLid ? phoneFromWaJid(rawJid) : undefined;
 
           const row = await sessionRepository.findBySessionId(sessionId);
           if (row?.phone_number && phone) {
-            const registered = normalizePhoneDigits(row.phone_number);
-            const scanned = normalizePhoneDigits(phone);
-            if (registered !== scanned) {
+            if (!phonesMatch(row.phone_number, phone)) {
               waLogger.warn(
-                { sessionId, registered, scanned },
+                { sessionId, registered: row.phone_number, scanned: phone, rawJid },
                 'Nomor yang discan tidak cocok dengan nomor terdaftar',
               );
               this.setStatus(sessionId, 'failed', undefined, {
@@ -355,14 +355,18 @@ class SessionManager {
             }
           }
 
+          const connectedPhone =
+            phone ??
+            (row?.phone_number ? normalizePhoneDigits(row.phone_number) : undefined);
+
           this.setStatus(sessionId, 'connected', {
-            phone_number: phone,
+            phone_number: connectedPhone,
             display_name: user?.name ?? undefined,
           });
           void webhookService.dispatch('session.connected', sessionId, {
-            phone_number: phone,
+            phone_number: connectedPhone,
           });
-          waLogger.info({ sessionId, phone }, 'Session connected');
+          waLogger.info({ sessionId, phone: connectedPhone, rawJid }, 'Session connected');
         }
 
         if (connection === 'close') {
