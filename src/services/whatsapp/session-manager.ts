@@ -19,6 +19,7 @@ import { sessionEventRepository } from '../database/repositories/session-event.r
 import { messageRepository } from '../database/repositories/message.repository.js';
 import { waLogger } from '../logger/index.js';
 import { waEventBus } from './event-bus.js';
+import { fonnteService } from '../notification/fonnte.service.js';
 import { webhookService } from '../webhook/webhook.service.js';
 import { waMessageStore } from './message-store.js';
 import { resolveRecipientJid } from './resolve-recipient.js';
@@ -252,6 +253,26 @@ class SessionManager {
     });
     waEventBus.emitStatus(sessionId, status);
     waEventBus.emitLog(sessionId, `Status: ${status}`);
+
+    if (status === 'connected') {
+      fonnteService.clearCooldown(sessionId);
+    }
+  }
+
+  private alertReconnectFailure(
+    sessionId: string,
+    statusCode: number | undefined,
+    reason: string,
+  ): void {
+    void sessionRepository.findBySessionId(sessionId).then((row) => {
+      if (!row?.phone_number) return;
+      void fonnteService.notifyReconnectFailed({
+        sessionId,
+        phone: row.phone_number,
+        reason,
+        statusCode: statusCode ?? null,
+      });
+    });
   }
 
   async connect(sessionId: string): Promise<void> {
@@ -447,7 +468,15 @@ class SessionManager {
           }
 
           waLogger.error({ sessionId, statusCode }, 'Session connection failed');
-          this.setStatus(sessionId, 'failed');
+          this.alertReconnectFailure(
+            sessionId,
+            statusCode,
+            `Reconnect gagal setelah ${config.whatsapp.maxReconnectAttempts} percobaan`,
+          );
+          this.setStatus(sessionId, 'failed', undefined, {
+            status_code: statusCode ?? null,
+            reason: 'Reconnect gagal — notifikasi Fonnte dikirim',
+          });
         }
       });
 

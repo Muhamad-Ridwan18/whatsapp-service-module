@@ -102,4 +102,13 @@ export const config = {
   cors: {
     origin: process.env.CORS_ORIGIN ?? '*',
   },
+
+  fonnte: {
+    token: (process.env.FONNTE_TOKEN ?? '').trim() || null,
+    apiUrl: (process.env.FONNTE_API_URL ?? 'https://api.fonnte.com/send').trim(),
+    enabled: (process.env.FONNTE_ENABLED ?? 'true') !== 'false'
+      && !!(process.env.FONNTE_TOKEN ?? '').trim(),
+    cooldownMs: parseInt(process.env.FONNTE_ALERT_COOLDOWN_MS ?? '1800000', 10),
+    timeoutMs: parseInt(process.env.FONNTE_TIMEOUT_MS ?? '10000', 10),
+  },
 } as const;

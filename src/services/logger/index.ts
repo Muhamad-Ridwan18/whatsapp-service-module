@@ -32,3 +32,4 @@ export const authLogger = logger.child({ module: 'auth' });
 export const messageLogger = logger.child({ module: 'message' });
 export const webhookLogger = logger.child({ module: 'webhook' });
 export const waLogger = logger.child({ module: 'whatsapp' });
+export const fonnteLogger = logger.child({ module: 'fonnte' });
